@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { normalizeURL, analyzeHTML, handle } from './index.mjs';
 
 const clean = '<!doctype html><html lang="zh-CN"><head><title>示例企业网站 SEO GEO 技术优化方案</title><meta name="description" content="这是一个完整的企业网站服务介绍，涵盖网站开发、技术 SEO 优化、实体结构化数据建设与项目技术交付，并且提供丰富的实操指导信息。"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="canonical" href="https://example.com/"><meta property="og:title" content="example"><meta property="og:description" content="description"><script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","sameAs":["https://example.org/"]}</script></head><body><h1>企业网站服务</h1><h2>详细服务说明</h2><img alt="说明图" src="/one.png"><a href="/a">a</a><a href="/b">b</a><a href="/c">c</a></body></html>';
@@ -34,4 +35,11 @@ assert.ok(html.includes('开始免费检测'));
 assert.ok(html.includes('让网站更容易'));
 assert.ok(!html.includes(String.fromCharCode(92)+'u8BA9'));
 assert.equal(page.headers.get('cache-control'), 'no-store');
-console.log('All 18 assertions passed');
+// Cloudflare Rocket Loader must not postpone the only interactive script.
+assert.ok(html.includes('<script data-cfasync="false">'));
+const inlineScript = html.match(/<script data-cfasync="false">([\\s\\S]*?)<\\/script>/)?.[1];
+assert.ok(inlineScript, 'inline scan form controller exists');
+assert.doesNotThrow(() => new vm.Script(inlineScript), 'scan form controller parses');
+assert.match(page.headers.get('content-security-policy') || '', /script-src 'self' 'unsafe-inline'/);
+assert.match(inlineScript, /scanForm.*addEventListener/);
+console.log('All assertions passed');
