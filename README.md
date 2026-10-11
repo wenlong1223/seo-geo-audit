@@ -35,7 +35,7 @@ curl -X POST "https://seo-geo-audit-web-production.up.railway.app/api/audit" \
 - **Runtime:** Bun / TypeScript（无第三方运行时依赖）
 - **UI:** 原生 HTML、CSS、JavaScript；深色响应式中文界面
 - **扫描:** 服务端 HTTP 请求、HTML 解析、robots / sitemap 探测和 JSON-LD 解析
-- **生产部署:** Railway Function（当前在线实例，代码存于 Railway）
+- **生产部署:** Railway GitHub 自动部署（Dockerfile + Bun，main 分支）
 
 ## 本地运行
 
@@ -55,13 +55,22 @@ node test.mjs
 
 仓库中的 `index.mjs` 与 `index.ts` 采用同一份部署逻辑，方便 Node.js 测试，无需转译步骤。
 
-## 用 Railway Functions 部署
+## Railway 自动部署（已启用）
 
-1. 在 Railway 创建项目，添加 **Function（Bun）**。
-2. 将本仓库 `index.ts` 的完整源码作为 Function 的源代码。
-3. 在 Networking 中生成 HTTPS 公网域名，确认访问 `/api/health` 成功。
+生产服务 `seo-geo-audit-web` 已连接 GitHub 仓库 [wenlong1223/seo-geo-audit](https://github.com/wenlong1223/seo-geo-audit) 的 `main` 分支。
 
-**重要：** 目前运行中的 Railway Function 使用手动部署的单文件源代码；单纯 GitHub Push **不会自动同步到生产环境**。如要启用 GitHub Push 自动部署，可改用 GitHub 源码服务并明确配置构建与启动命令。
+1. 代码推送到 `main` 后，Railway 会自动拉取该分支并开始部署（不固定某个提交 SHA）。
+2. 使用仓库根目录的 `Dockerfile` 构建 Bun 镜像，并执行 `bun run index.ts`。
+3. 通过 `/api/health` 健康检查后，新版本才会成为服务中的可用部署。
+4. 原线上地址持续使用：https://seo-geo-audit-web-production.up.railway.app/
+
+`.github/workflows/ci.yml` 会在 GitHub Push 和 Pull Request 时运行 Node.js 功能测试。**注意：Railway 自动部署不等待 GitHub Actions 测试通过；建议通过 Pull Request 先验证，再合并到 `main` 发布。**
+
+### 从其他 Railway 项目部署
+
+1. 将本 GitHub 仓库连接到 Railway 项目中，选择 `main` 分支；
+2. 自动识别仓库的 `Dockerfile` 和 `railway.json`，并确认健康检查路径为 `/api/health`；
+3. 生成 Railway 域名、检查服务状态，随后推送新提交测试自动部署是否触发。
 
 ## 安全与使用限制
 
@@ -72,7 +81,7 @@ node test.mjs
 
 ## 仓库文件
 
-- `index.ts`：线上 Railway Bun Function 对应的完整源码
+- `index.ts`：线上 Railway 服务构建使用的 Bun / TypeScript 完整源码
 - `index.mjs`：同一份源码的 Node.js ESM 测试镜像
 - `test.mjs`：本地功能和安全回归断言
 - `.github/workflows/ci.yml`：每次推送自动运行测试
