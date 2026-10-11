@@ -37,7 +37,7 @@ assert.ok(!html.includes(String.fromCharCode(92)+'u8BA9'));
 assert.equal(page.headers.get('cache-control'), 'no-store');
 // Cloudflare Rocket Loader must not postpone the only interactive script.
 assert.ok(html.includes('<script data-cfasync="false">'));
-const inlineScript = html.match(/<script data-cfasync="false">([\\s\\S]*?)<\\/script>/)?.[1];
+const inlineScript = html.split('<script data-cfasync="false">')[1]?.split('</script>')[0];
 assert.ok(inlineScript, 'inline scan form controller exists');
 assert.doesNotThrow(() => new vm.Script(inlineScript), 'scan form controller parses');
 assert.match(page.headers.get('content-security-policy') || '', /script-src 'self' 'unsafe-inline'/);
