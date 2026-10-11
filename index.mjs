@@ -1,0 +1,207 @@
+/** SEO / GEO Audit - standalone Railway Function (Bun), no third-party packages. */
+import { lookup } from 'node:dns/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { BlockList, isIP } from 'node:net';
+import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib';
+
+const blocked = new BlockList();
+for (const [ip, mask] of [
+  ['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],
+  ['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],
+  ['192.0.2.0',24],['192.168.0.0',16],['198.18.0.0',15],
+  ['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4]
+]) blocked.addSubnet(ip, mask, 'ipv4');
+for (const [ip, mask] of [['::',128],['::1',128],['fc00::',7],['fe80::',10],['ff00::',8],['2001:db8::',32]]) blocked.addSubnet(ip, mask, 'ipv6');
+const deniedHosts = /(^localhost$|\.localhost$|\.local$|\.internal$|\.home$|\.test$|\.invalid$|\.onion$|\.arpa$)/i;
+const MAX_RESPONSE = 800_000;
+const MAX_REDIRECTS = 3;
+const REQUEST_TIMEOUT = 7500;
+const cleanText = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&(?:nbsp|#160);/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g,' ').trim();
+const chars = (s) => [...String(s || '')].length;
+function normalizeURL(input) {
+  let raw = String(input || '').trim();
+  if (!raw || raw.length > 2048) throw new Error('请输入长度不超过 2048 字符的网址');
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  let u; try { u = new URL(raw); } catch { throw new Error('网址格式不正确'); }
+  if (!['http:','https:'].includes(u.protocol) || u.username || u.password || (u.port && !['80','443'].includes(u.port))) throw new Error('仅支持无账号密码的 HTTP/HTTPS 标准端口网址');
+  if (!u.hostname || isIP(u.hostname.replace(/^\[|\]$/g,'')) || deniedHosts.test(u.hostname) || !u.hostname.includes('.')) throw new Error('仅允许公网域名，不能检测 IP 地址或内网主机');
+  if (u.hostname.length > 253) throw new Error('域名过长');
+  u.hash = '';
+  return u;
+}
+async function publicAddress(hostname) {
+  let addrs;
+  try { addrs = await lookup(hostname, { all: true, verbatim: true }); }
+  catch { throw new Error('无法解析目标域名'); }
+  // Select only a DNS answer that is a routable public address, and pin it.
+  const candidates = addrs.filter(x => {
+    const family = isIP(x.address);
+    if (!family || family !== x.family) return false;
+    if (blocked.check(x.address, family === 6 ? 'ipv6' : 'ipv4')) return false;
+    // Reject IPv6-mapped, local, documentation, and non-global ranges.
+    if (family === 6 && !/^[23][0-9a-f]*:/i.test(x.address)) return false;
+    return true;
+  });
+  if (!candidates.length) throw new Error('目标域名没有可用的公网 IP 地址');
+  return candidates.find(x => x.family === 4) || candidates[0];
+}
+async function oneRequest(u) {
+  const addr = await publicAddress(u.hostname);
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (err, value) => { if (settled) return; settled = true; if (err) reject(err); else resolve(value); };
+    const req = (u.protocol === 'https:' ? httpsRequest : httpRequest)({
+      protocol: u.protocol, hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname + u.search, method:'GET',
+      headers: {'User-Agent':'SeoGeoAuditBot/1.0 (+https://github.com/wenlong1223)', 'Accept':'text/html,application/xml,text/xml,text/plain;q=0.8,*/*;q=0.2', 'Accept-Encoding':'identity'},
+      lookup: (_host, opts, callback) => { if (typeof opts === 'object' && opts.all) callback(null,[addr]); else callback(null,addr.address,addr.family); },
+      timeout: REQUEST_TIMEOUT,
+    }, res => {
+      const chunks = []; let length = 0;
+      res.on('data', chunk => { length += chunk.length; if (length > MAX_RESPONSE) { req.destroy(new Error('目标页面超过 800 KB 的安全限制')); return; } chunks.push(chunk); });
+      res.on('end', () => {
+        try {
+          let body = Buffer.concat(chunks); const enc = String(res.headers['content-encoding'] || '').toLowerCase();
+          if (enc === 'gzip') body = gunzipSync(body); else if (enc === 'deflate') body = inflateSync(body); else if (enc === 'br') body = brotliDecompressSync(body);
+          if (body.length > MAX_RESPONSE) throw new Error('解压后的页面超过 800 KB 安全限制');
+          done(null,{status:res.statusCode || 0,headers:res.headers,body:body.toString('utf8')});
+        } catch(e){done(e)}
+      });
+      res.on('error',e=>done(e));
+    });
+    req.on('timeout',()=>req.destroy(new Error('请求超时（7.5 秒）')));
+    req.on('error',e=>done(new Error('请求失败：'+e.message)));
+    req.end();
+  });
+}
+async function fetchSafe(url) {
+  let u = normalizeURL(url); let hops = 0;
+  while (true) {
+    const response = await oneRequest(u);
+    if ([301,302,303,307,308].includes(response.status) && response.headers.location) {
+      if (++hops > MAX_REDIRECTS) throw new Error('跳转次数过多');
+      u = normalizeURL(new URL(response.headers.location,u).href);
+      continue;
+    }
+    return {...response,url:u.href, redirects:hops};
+  }
+}
+function tags(html, name) {
+  const pattern = new RegExp(`<${name}(?=[\\s/>])[^>]*>`, 'gi');
+  return [...html.matchAll(pattern)].map(m => attrs(m[0]));
+}
+function attrs(html) {
+  const out = {};
+  const start = html.replace(/^<\/?[\w:-]+\s*/, '').replace(/\/?>$/, '');
+  for (const m of start.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g)) out[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? '';
+  return out;
+}
+function firstMatch(html, re) {return cleanText(html.match(re)?.[1] || '');}
+function metaValue(meta, key, value) {return meta.find(x => x[key] === value)?.content || '';}
+function jsonTypes(input) {
+  const found = new Set();
+  function visit(x, depth=0) { if (depth>12 || !x || typeof x !== 'object') return;
+    if (Array.isArray(x)) { x.slice(0,100).forEach(y=>visit(y,depth+1)); return; }
+    if (x['@type']) (Array.isArray(x['@type'])?x['@type']:[x['@type']]).forEach(t=>found.add(String(t)));
+    for(const [key,val] of Object.entries(x)) if (key !== '@context' && key !== '@type') visit(val,depth+1);
+  }
+  visit(input); return [...found];
+}
+function analyzeHTML(html, context={}) {
+  const {url='https://example.com/',status=200,headers={},robots=null,sitemap=null,llms=null,redirects=0} = context;
+  const meta = tags(html,'meta'), links = tags(html,'link'), images=tags(html,'img'), anchors=tags(html,'a');
+  const headings = [...html.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi)].map(m=>({level:Number(m[1]),text:cleanText(m[2]).slice(0,120)}));
+  const title = firstMatch(html,/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  const description = cleanText(metaValue(meta,'name','description'));
+  const robotsTag = (metaValue(meta,'name','robots')+' '+String(headers['x-robots-tag']||'')).toLowerCase();
+  const canonical = links.find(l=>(l.rel||'').toLowerCase().split(/\s+/).includes('canonical'))?.href || '';
+  const language = attrs(html.match(/<html\b[^>]*>/i)?.[0]||'').lang || '';
+  const viewport=metaValue(meta,'name','viewport');
+  const ogTitle=metaValue(meta,'property','og:title'); const ogDesc=metaValue(meta,'property','og:description');
+  const internalLinks = anchors.filter(a=>{try{if(!a.href||a.href.startsWith('#')||/^(mailto:|tel:|javascript:)/i.test(a.href))return false;return new URL(a.href,url).hostname===new URL(url).hostname;}catch{return false}}).length;
+  const altMissing=images.filter(i=>!i.alt?.trim()).length;
+  let schemaParsed=0,schemaInvalid=0; const schemaTypes=new Set(); let hasSameAs=false;
+  for(const s of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    const at=attrs('<script '+s[1]+'>');
+    if(!/application\/ld\+json/i.test(at.type||''))continue;
+    try{const x=JSON.parse(s[2].replace(/^\s*<!--|-->\s*$/g,'')); schemaParsed++;jsonTypes(x).forEach(t=>schemaTypes.add(t)); if(JSON.stringify(x).includes('"sameAs"'))hasSameAs=true;}catch{schemaInvalid++}
+  }
+  const schemaList=[...schemaTypes].slice(0,40);
+  const hasEntity=schemaList.some(t=>/^(Organization|Corporation|LocalBusiness|Store|Person|ProfessionalService|NGO|EducationalOrganization|MedicalOrganization)$/i.test(t));
+  const faqOnPage=/常见问题|常见问答|FAQ|Frequently Asked Questions|Q\s*&\s*A/i.test(html.slice(0,300_000)) || schemaList.some(t=>t==='FAQPage');
+  const faqSchema=schemaList.includes('FAQPage');
+  const checks=[];
+  const add=(group,id,label,weight,status,detail,fix)=>checks.push({group,id,label,weight,status,detail,fix});
+  const seo='SEO', geo='GEO';
+  add(seo,'http','HTTP 状态',6,status===200?'pass':status>=200&&status<300?'warn':'fail',`HTTP ${status}，跳转 ${redirects} 次`,'确保页面可稳定返回 HTTP 200。');
+  add(seo,'https','HTTPS',5,url.startsWith('https:')?'pass':'fail',url.startsWith('https:')?'使用 HTTPS 加密连接':'当前使用 HTTP','配置有效的 TLS 证书并将 HTTP 301 跳转到 HTTPS。');
+  add(seo,'index','索引指令',7,/\bnoindex\b/.test(robotsTag)?'fail':'pass',/\bnoindex\b/.test(robotsTag)?'检测到 noindex':'未检测到 noindex（不代表一定已被收录）','移除不必要的 noindex，检查页面可访问性。');
+  add(seo,'title','Title 标题',8,!title?'fail':chars(title)<12||chars(title)>70?'warn':'pass',title?`${chars(title)} 字符：${title.slice(0,110)}`:'缺少 title','为页面编写唯一、清晰的标题，避免关键词堆砌。');
+  add(seo,'description','Meta Description',7,!description?'fail':chars(description)<35||chars(description)>180?'warn':'pass',description?`${chars(description)} 字符：${description.slice(0,125)}`:'缺少页面描述','编写准确概括页面内容的描述；搜索结果摘要可能由搜索引擎改写。');
+  const h1s=headings.filter(h=>h.level===1);
+  add(seo,'h1','H1 主标题',7,h1s.length===1?'pass':h1s.length>1?'warn':'fail',`发现 ${h1s.length} 个 H1`,'设置清晰的主要标题；多 H1 不必然错误，但应避免结构混乱。');
+  let canonicalValid=false;try{canonicalValid=!!canonical&&['https:','http:'].includes(new URL(canonical,url).protocol)}catch{}
+  add(seo,'canonical','Canonical',5,!canonical?'warn':canonicalValid?'pass':'fail',canonical||'未发现 canonical','如存在重复 URL，设置规范化地址并确保目标正确。');
+  add(seo,'lang','页面语言',3,language?'pass':'warn',language||'HTML 未声明 lang','为 html 元素添加正确的 lang 属性，如 zh-CN 或 en。');
+  add(seo,'viewport','移动端视口',3,viewport?'pass':'warn',viewport||'未设置 viewport','移动端页面建议设置 width=device-width, initial-scale=1。');
+  add(seo,'alt','图片替代文本',5,!images.length?'na':altMissing===0?'pass':altMissing/images.length<0.3?'warn':'fail',images.length?`${images.length} 张图片中 ${altMissing} 张缺少 alt`:'未发现 img 标签','为内容图片提供描述性 alt，纯装饰图片可使用空 alt。');
+  add(seo,'links','内部链接',4,internalLinks>=3?'pass':internalLinks>0?'warn':'fail',`检测到 ${internalLinks} 个站内链接`,'建立合理的上下文内链，帮助用户和爬虫发现重要页面。');
+  add(seo,'robots','robots.txt',3,robots?.status===200?'pass':robots?.status===404?'warn':'warn',robots?.status===200?'robots.txt 可获取':robots?.status?`HTTP ${robots.status}`:'未能获取 robots.txt','检查 robots.txt 规则，避免误屏蔽重要资源与目录。');
+  const mapSeen=sitemap?.status===200||!!(robots?.body||'').match(/^sitemap:\s*\S+/im);
+  add(seo,'sitemap','XML Sitemap',4,mapSeen?'pass':'warn',mapSeen?'发现网站地图线索':'未发现 sitemap.xml 或 robots.txt 中的 Sitemap 指令','为需要索引的网站维护有效的 XML Sitemap。');
+  add(seo,'social','社交摘要',3,ogTitle&&ogDesc?'pass':ogTitle||ogDesc?'warn':'fail',`Open Graph 标题：${ogTitle?'有':'无'}；描述：${ogDesc?'有':'无'}`,'补充 og:title、og:description，改善内容分享预览。');
+  add(geo,'jsonld','JSON-LD 结构化数据',9,schemaParsed&&schemaInvalid===0?'pass':schemaParsed?'warn':'fail',`有效块 ${schemaParsed}，无效块 ${schemaInvalid}`,'添加符合 Schema.org 规范且与页面可见内容一致的 JSON-LD，并使用 Google 富媒体结果测试验证。');
+  add(geo,'entity','实体 Schema 类型',7,hasEntity?'pass':schemaParsed?'warn':'fail',schemaList.length?'发现 '+schemaList.join('、'):'未发现实体类型','企业首页按实际主体添加 Organization/LocalBusiness，产品页则应使用适用的 Product 类型。');
+  add(geo,'sameas','实体关联 sameAs',5,!hasEntity?'na':hasSameAs?'pass':'warn',!hasEntity?'无适用实体 Schema':hasSameAs?'检测到 sameAs':'尚无 sameAs 属性','有真实且权威的企业或个人资料页时，添加准确的 sameAs 链接。');
+  add(geo,'structure','正文标题结构',4,headings.some(h=>h.level===2)?'pass':headings.length?'warn':'fail',`发现 ${headings.length} 个 H1–H6 标题，其中 H2 ${headings.filter(h=>h.level===2).length} 个`,'使用语义化 H2/H3 分节，确保页面信息组织清晰。');
+  add(geo,'faq','FAQ 内容标记',5,!faqOnPage?'na':faqSchema?'pass':'warn',faqOnPage?(faqSchema?'检测到 FAQPage 类型':'发现 FAQ 内容，但未检测到 FAQPage 类型'):'当前页面无明确 FAQ 内容','只有当页面确实展示问答时才考虑相符的 FAQPage 标记；不保证搜索富媒体结果。');
+  const rating=g=>{const list=checks.filter(x=>x.group===g&&x.status!=='na');const max=list.reduce((a,x)=>a+x.weight,0);const earned=list.reduce((a,x)=>a+x.weight*(x.status==='pass'?1:x.status==='warn'?0.5:0),0);return max?Math.round(earned/max*100):0};
+  const seoScore=rating(seo), geoScore=rating(geo);const score=Math.round(seoScore*0.7+geoScore*0.3);
+  const issues=checks.filter(x=>x.status==='fail'||x.status==='warn').sort((a,b)=> (a.status==='fail'?-1:0)-(b.status==='fail'?-1:0)||b.weight-a.weight);
+  return {url,scannedAt:new Date().toISOString(),status,score,seoScore,geoScore,
+    disclaimer:'启发式技术就绪度评分，不是搜索排名、流量预测或 AI 答案引用率。仅检测该 URL 和少量约定路径，不执行全站爬取。',
+    summary:{title,description,language,canonical,headings:headings.slice(0,40),schemaTypes:schemaList,images:images.length,altMissing,internalLinks,redirects,robotsStatus:robots?.status??null,sitemapStatus:sitemap?.status??null,llmsStatus:llms?.status??null},
+    checks,issues:issues.slice(0,20),passed:checks.filter(x=>x.status==='pass').length,warnings:checks.filter(x=>x.status==='warn').length,failed:checks.filter(x=>x.status==='fail').length,notApplicable:checks.filter(x=>x.status==='na').length};
+}
+async function audit(input) {
+  const u=normalizeURL(input);const main=await fetchSafe(u.href);
+  if(main.status>=400)throw new Error(`目标页面返回 HTTP ${main.status}，无法执行 HTML 分析`);
+  const ct=String(main.headers['content-type']||'');
+  if(ct&&!/(text\/html|application\/xhtml\+xml)/i.test(ct))throw new Error('目标不是 HTML 页面（Content-Type: '+ct.slice(0,60)+'）');
+  const origin=new URL(main.url).origin;
+  const probe=async path=>{try{return await fetchSafe(origin+path)}catch{return null}};
+  const [robots,sitemap,llms]=await Promise.all([probe('/robots.txt'),probe('/sitemap.xml'),probe('/llms.txt')]);
+  return analyzeHTML(main.body,{url:main.url,status:main.status,headers:main.headers,robots,sitemap,llms,redirects:main.redirects});
+}
+
+const HTML = `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>SEO / GEO Audit — 网站技术可见性检测</title><meta name="description" content="免费检测网站技术 SEO、Schema JSON-LD、实体信息和 GEO 内容就绪度。"><style>
+:root{font-family:Inter,"PingFang SC","Microsoft Yahei",system-ui,sans-serif;color:#eaf0fb;background:#081120;font-synthesis:none}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -18%,#17435a 0%,transparent 42%),#081120}button,input{font:inherit}.shell{width:min(1120px,calc(100% - 36px));margin:auto}header{display:flex;align-items:center;justify-content:space-between;padding:25px 0}.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.5px}.mark{width:35px;height:35px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,#4be0c4,#2b9de0);color:#06232a;font-weight:900}.micro{font-size:12px;color:#90a9c7;border:1px solid #2b4057;border-radius:30px;padding:8px 12px}.hero{text-align:center;padding:76px 0 47px}.eyebrow{color:#6ee7cf;font-size:12px;letter-spacing:2.5px;font-weight:700}.hero h1{font-size:clamp(34px,5.5vw,62px);line-height:1.17;letter-spacing:-2px;margin:18px auto 19px;max-width:780px}.hero h1 span{background:linear-gradient(100deg,#6ce5c6,#64aff5);background-clip:text;color:transparent}.lead{color:#a2b3c9;line-height:1.9;font-size:16px;max-width:670px;margin:0 auto 34px}.search{display:flex;gap:10px;background:#101e31;border:1px solid #2b4058;padding:8px;border-radius:15px;max-width:760px;margin:auto;box-shadow:0 18px 55px #0003}.search input{width:100%;flex:1;min-width:0;background:none;border:0;outline:0;color:#f2f6fc;padding:10px 14px;font-size:15px}.search input::placeholder{color:#788ea8}.search button,.button{border:0;background:linear-gradient(120deg,#51e2c6,#65b9f4);color:#06202b;border-radius:10px;font-weight:750;padding:14px 23px;cursor:pointer;white-space:nowrap}.search button:hover,.button:hover{filter:brightness(1.08)}button:disabled{opacity:.5;cursor:wait}.hint{font-size:12px;color:#778da9;margin:17px auto}.features{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;margin:0 0 55px}.features span{background:#13243a;color:#a4bfd6;border:1px solid #263e56;border-radius:30px;padding:9px 14px;font-size:12px}.notice{padding:14px 18px;border:1px solid #653e43;color:#f0b5b5;background:#2b1924;border-radius:12px;margin:15px 0}.hidden{display:none!important}.results{padding-bottom:65px}.dashboard{display:grid;grid-template-columns:260px 1fr;gap:18px}.panel{background:#101d2e;border:1px solid #273b50;border-radius:17px;padding:23px;min-width:0}.scorebox{text-align:center}.ring{height:158px;width:158px;border-radius:50%;display:grid;place-items:center;margin:6px auto 20px;background:conic-gradient(#54dac6 calc(var(--pct)*1%),#2b3b50 0)}.ring .inner{width:132px;height:132px;border-radius:50%;display:grid;place-items:center;background:#101d2e}.scoreNumber{font-size:45px;font-weight:850;letter-spacing:-2px}.scoreSmall{color:#94a8c0;font-size:13px}.sectionTitle{font-size:18px;font-weight:800;letter-spacing:-.4px;margin:0 0 18px}.small{font-size:12px;color:#91a5bf;line-height:1.8}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.metric{border:1px solid #2a4057;padding:16px;border-radius:12px;background:#132338}.metric strong{display:block;font-size:29px;margin:9px 0 2px}.metric span{font-size:12px;color:#9cb2cb}.url{color:#a9f1df;overflow-wrap:anywhere;font-size:13px}.details{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.row{display:flex;gap:12px;justify-content:space-between;align-items:start;border-bottom:1px solid #26384d;padding:13px 0}.row:last-child{border-bottom:0}.row .lbl{min-width:72px;color:#8fa6be;font-size:12px}.row .val{font-size:13px;text-align:right;overflow-wrap:anywhere;max-width:76%}.checkList{display:flex;flex-direction:column;gap:9px}.check{border:1px solid #263d55;border-radius:12px;padding:15px;background:#122338}.checkHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}.checkHead strong{font-size:13px}.check p{margin:5px 0;color:#a2b5cc;font-size:12px;line-height:1.7;overflow-wrap:anywhere}.check .fix{color:#b9dcd6}.flag{font-size:11px;flex-shrink:0;border-radius:7px;padding:5px 8px}.pass{color:#67dfbd;background:#144239}.warn{color:#ffce75;background:#4c3b22}.fail{color:#ff989e;background:#4f252f}.na{color:#9cafc7;background:#2a3949}.full{margin-top:18px}.toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.secondaryBtn{background:transparent;color:#a8dfe3;border:1px solid #315768;border-radius:9px;padding:10px 15px;cursor:pointer;font-size:12px}.footer{text-align:center;border-top:1px solid #24364a;padding:28px 0 38px;color:#6f829d;font-size:12px;line-height:1.8}.footer a{color:#8ee1d5;text-decoration:none}@media(max-width:760px){.hero{padding:48px 0 35px}.hero h1{letter-spacing:-1px}.dashboard,.details{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.metric{padding:13px 10px}.metric strong{font-size:23px}.search{flex-direction:column}.search button{width:100%}.micro{font-size:10px}}
+</style></head><body><div class="shell"><header><div class="logo"><span class="mark">↗</span> SEO<span style="color:#65e0c6">/</span>GEO Audit</div><span class="micro">v1.0 · Website Intelligence</span></header><section class="hero"><div class="eyebrow">TECHNICAL SEO × AI READINESS</div><h1>让网站更容易<br><span>被搜索发现 · 被 AI 理解</span></h1><p class="lead">输入网址，自动检测页面技术 SEO、Schema 结构化数据、实体信息和内容可理解性。提供明确的问题列表与修复建议。</p><form class="search" id="scanForm"><input id="urlInput" type="text" name="url" placeholder="输入网站，例如 example.com" required autocomplete="url" maxlength="2048" aria-label="网站地址"><button id="submitBtn" type="submit">开始免费检测 →</button></form><p class="hint">无需注册 · 单页面检测 · 不保存检测网址 · 每次最多约 30 秒</p></section><div class="features"><span>✓ Technical SEO</span><span>✓ Schema / JSON-LD</span><span>✓ Entity Signals</span><span>✓ Robots / Sitemap</span><span>✓ 问题修复建议</span></div><div id="error" class="notice hidden" role="alert"></div><section id="results" class="results hidden" aria-live="polite"><div class="dashboard"><div class="panel scorebox"><h2 class="sectionTitle">综合技术就绪度</h2><div class="ring" id="ring"><div class="inner"><div><div id="score" class="scoreNumber">—</div><div class="scoreSmall">/ 100 分</div></div></div></div><p id="scoreTip" class="small"></p></div><div class="panel"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">检测概览</h2><button class="secondaryBtn" type="button" id="downloadBtn">下载 JSON 报告 ↓</button></div><p id="target" class="url"></p><div class="metrics"><div class="metric"><span>Technical SEO</span><strong id="seoScore">—</strong><span>70% 权重</span></div><div class="metric"><span>GEO Readiness</span><strong id="geoScore">—</strong><span>30% 权重</span></div><div class="metric"><span>待改进项</span><strong id="issuesCount">—</strong><span>警告及失败</span></div></div><p class="small">检测分数来自公开规则，不代表 Google 排名或 AI 平台引用概率。</p></div></div><div class="details"><div class="panel"><h2 class="sectionTitle">页面信息</h2><div id="facts"></div></div><div class="panel"><h2 class="sectionTitle">优先修复</h2><div id="priority" class="checkList"></div></div></div><div class="panel full"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">全部检测项</h2><span id="counts" class="small"></span></div><div id="checks" class="details" style="margin-top:14px"></div></div><p class="small" id="disclaimer" style="margin-top:15px"></p></section><div class="footer">© 2026 SEO / GEO Audit · Created by <a href="https://github.com/wenlong1223" rel="noopener" target="_blank">wenlong1223</a><br>这是技术诊断工具，不提供排名保证；不执行全站爬虫扫描。</div></div><script>
+const $=id=>document.getElementById(id);let currentReport=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const label={pass:'通过',warn:'建议优化',fail:'需要修复',na:'不适用'};
+const box=c=>'<div class="check"><div class="checkHead"><strong>'+esc(c.label)+'</strong><span class="flag '+esc(c.status)+'">'+label[c.status]+'</span></div><p>'+esc(c.detail)+'</p>'+(c.status==='pass'||c.status==='na'?'':'<p class="fix">建议：'+esc(c.fix)+'</p>')+'</div>';
+function render(d){currentReport=d;$('results').classList.remove('hidden');$('score').textContent=d.score;$('ring').style.setProperty('--pct',d.score);$('scoreTip').textContent=d.score>=85?'基础技术状况较好，继续验证搜索平台数据。':d.score>=60?'存在可改进项，建议先处理高权重问题。':'基础技术就绪度偏低，建议先修复错误项。';$('target').textContent=d.url;$('seoScore').textContent=d.seoScore;$('geoScore').textContent=d.geoScore;$('issuesCount').textContent=d.warnings+d.failed;$('counts').textContent='通过 '+d.passed+' · 警告 '+d.warnings+' · 失败 '+d.failed+' · 不适用 '+d.notApplicable;const s=d.summary;const facts=[['页面标题',s.title||'未设置'],['页面语言',s.language||'未设置'],['Canonical',s.canonical||'未设置'],['Schema 类型',s.schemaTypes.join('、')||'未检测到'],['图片',s.images+' 张（缺少 alt '+s.altMissing+' 张）'],['内部链接',s.internalLinks+' 个'],['robots.txt',s.robotsStatus??'不可获取'],['sitemap.xml',s.sitemapStatus??'不可获取'],['llms.txt（可选）',s.llmsStatus??'不可获取']];$('facts').innerHTML=facts.map(([a,b])=>'<div class="row"><span class="lbl">'+esc(a)+'</span><span class="val">'+esc(b)+'</span></div>').join('');$('priority').innerHTML=d.issues.length?d.issues.slice(0,5).map(box).join(''):'<p class="small">暂未发现需要处理的告警。</p>';$('checks').innerHTML=['SEO','GEO'].map(g=>'<div><h3 class="sectionTitle">'+(g==='SEO'?'Technical SEO':'GEO / Entity Readiness')+'</h3><div class="checkList">'+d.checks.filter(x=>x.group===g).map(box).join('')+'</div></div>').join('');$('disclaimer').textContent=d.disclaimer;$('results').scrollIntoView({behavior:'smooth',block:'start'});}
+$('scanForm').addEventListener('submit',async e=>{e.preventDefault();$('error').classList.add('hidden');const btn=$('submitBtn');btn.disabled=true;btn.textContent='正在安全扫描…';try{const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),35000);let r;try{r=await fetch('/api/audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:$('urlInput').value}),signal:ctrl.signal});}finally{clearTimeout(to)}const data=await r.json();if(!r.ok)throw new Error(data.error||'扫描失败');render(data);}catch(err){$('error').textContent='检测失败：'+(err.name==='AbortError'?'请求超时，请稍后重试':err.message);$('error').classList.remove('hidden');}finally{btn.disabled=false;btn.textContent='开始免费检测 →';}});
+$('downloadBtn').addEventListener('click',()=>{if(!currentReport)return;const blob=new Blob([JSON.stringify(currentReport,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seo-geo-audit-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);});
+</script></body></html>`;
+
+const json = (data,status=200) => new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
+let active=0;
+const lastScans=[];
+async function handle(req) {
+  const path=new URL(req.url).pathname;
+  if(req.method==='GET'&&path==='/') return new Response(HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+  if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.0.1'});
+  if(req.method!=='POST'||path!=='/api/audit')return json({error:'Not found'},404);
+  const now=Date.now();while(lastScans.length&&lastScans[0]<now-60000)lastScans.shift();
+  if(active>=3||lastScans.length>=18)return json({error:'当前扫描请求较多，请一分钟后再试'},429);
+  if(Number(req.headers.get('content-length')||0)>4096)return json({error:'请求过大'},413);
+  let input;try{const raw=await req.text();if(raw.length>4096)return json({error:'请求过大'},413);input=JSON.parse(raw).url;}catch{return json({error:'请提交合法 JSON 请求体'},400)}
+  active++;lastScans.push(now);
+  try{return json(await audit(input));}catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}finally{active--}
+}
+if(typeof Bun!=='undefined')Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
+export {normalizeURL,analyzeHTML,handle,audit};

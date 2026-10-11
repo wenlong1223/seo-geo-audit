@@ -1,0 +1,19 @@
+{
+  "name": "seo-geo-audit",
+  "version": "1.0.1",
+  "private": false,
+  "description": "Free Chinese Technical SEO and GEO readiness auditor",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts",
+    "test": "node test.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wenlong1223/seo-geo-audit.git"
+  }
+}
