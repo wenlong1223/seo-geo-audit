@@ -1,7 +1,7 @@
 # SEO / GEO Audit
 
 > 免费、开源的中文网站技术 SEO 与 GEO 就绪度诊断工具。  
-> **在线体验：** https://seo-geo-audit-web-production.up.railway.app/
+> **在线体验：** https://geo.zwlla.com/
 
 [![Tests](https://github.com/wenlong1223/seo-geo-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/wenlong1223/seo-geo-audit/actions/workflows/ci.yml)
 
@@ -18,14 +18,14 @@
 
 ## 立即体验
 
-**在线网页：** https://seo-geo-audit-web-production.up.railway.app/
+**在线网页：** https://geo.zwlla.com/
 
-**健康检测：** https://seo-geo-audit-web-production.up.railway.app/api/health
+**健康检测：** https://geo.zwlla.com/api/health
 
 **API：**
 
 ```bash
-curl -X POST "https://seo-geo-audit-web-production.up.railway.app/api/audit" \
+curl -X POST "https://geo.zwlla.com/api/audit" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com/"}'
 ```
@@ -62,7 +62,7 @@ node test.mjs
 1. 代码推送到 `main` 后，Railway 会自动拉取该分支并开始部署（不固定某个提交 SHA）。
 2. 使用仓库根目录的 `Dockerfile` 构建 Bun 镜像，并执行 `bun run index.ts`。
 3. 通过 `/api/health` 健康检查后，新版本才会成为服务中的可用部署。
-4. 原线上地址持续使用：https://seo-geo-audit-web-production.up.railway.app/
+4. 原线上地址持续使用：https://geo.zwlla.com/
 
 `.github/workflows/ci.yml` 会在 GitHub Push 和 Pull Request 时运行 Node.js 功能测试。**生产环境已开启 Wait for CI：Railway 应等待 GitHub Actions 工作流通过后再部署。建议先通过 Pull Request 验证，再合并到 `main` 发布。**
 
