@@ -64,7 +64,7 @@ node test.mjs
 3. 通过 `/api/health` 健康检查后，新版本才会成为服务中的可用部署。
 4. 原线上地址持续使用：https://seo-geo-audit-web-production.up.railway.app/
 
-`.github/workflows/ci.yml` 会在 GitHub Push 和 Pull Request 时运行 Node.js 功能测试。**注意：Railway 自动部署不等待 GitHub Actions 测试通过；建议通过 Pull Request 先验证，再合并到 `main` 发布。**
+`.github/workflows/ci.yml` 会在 GitHub Push 和 Pull Request 时运行 Node.js 功能测试。**生产环境已开启 Wait for CI：Railway 应等待 GitHub Actions 工作流通过后再部署。建议先通过 Pull Request 验证，再合并到 `main` 发布。**
 
 ### 从其他 Railway 项目部署
 
