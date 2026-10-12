@@ -16,7 +16,7 @@
 
 **注意：** GEO 分数只代表结构化信息与技术就绪度，**不代表** Google 收录、SEO 排名、AI 平台真实引用率或任何商业效果保证。当前版本不运行 JS 渲染器，也不执行深度全站爬取。
 
-## 企业 GEO-16 审计模式（v1.1）
+## 企业 GEO-16 审计模式（v1.2）
 
 通过页面顶部切换 **企业 GEO-16 审计**，填写品牌名称、行业、目标关键词、主体名称及可选竞品信息，生成含 **16 个参考维度、抓取证据、待核验状态、优先整改 SOP、JSON 下载、打印/保存 PDF** 的企业报告。
 
@@ -31,7 +31,23 @@
 {"url":"https://example.com","brand":"Example Brand","industry":"b2b","hasStore":false}
 ```
 
-**部署安全：** 如果使用 Cloudflare WAF，须将该 API 加入与 `/api/audit` 相同的限流规则。
+**部署安全：** 如果使用 Cloudflare WAF，须将该 API 和 `/api/compare` 加入与 `/api/audit` 相同的限流规则。
+
+
+## 双站真实扫描对比（v1.2）
+
+首页选择「竞品双站对比」，输入**本站 URL** 和**竞品 URL**。工具对双方分别执行安全受限的 HTTP/HTTPS 真实抓取（首页或指定页面 + robots.txt/sitemap.xml/llms.txt 探测），用同一套 SEO/GEO 技术规则比较得分、检查项、原始摘要、差距和整改优先级。
+
+企业 GEO-16 审计中，选择「竞品对比（真实抓取）」并填写竞品 URL，也会在企业审计报告下方附上可打印的实测对照部分。其他阶段只保存竞品网址，不会额外抓取。
+
+**API：**
+
+- \`POST /api/compare\` —— \`{"url":"https://example.com","competitor":"https://example.org"}\`
+- \`POST /api/business-audit\` —— 当 \`stage="competitor"\` 且提供 \`competitor\` 时返回 \`comparison\` 对象。
+
+两站分别限制公网域名、DNS 公网地址校验、超时、大小、重定向、并发；双站对比占用 2 个扫描额度，且受 Cloudflare 同一 IP 限流保护。如果任一网站无法访问，将标明失败方，不生成虚假的对照分数。
+
+**重要边界：** 对比仅衡量所选页面的技术就绪度；不代表关键词排名、搜索流量、真实 AI 引用率或全站综合实力。对于不适用/无法核验的项目不判定谁领先。
 
 ## 立即体验
 
@@ -100,6 +116,7 @@ node test.mjs
 
 - `index.ts`：线上 Railway 服务构建使用的 Bun / TypeScript 完整源码
 - `index.mjs`：同一份源码的 Node.js ESM 测试镜像
+- `compare.mjs`：两个真实技术扫描结果的差异分析与整改优先级
 - `enterprise.mjs`：企业资料校验、16 维证据报告和整改建议映射
 - `test.mjs`：本地功能和安全回归断言
 - `.github/workflows/ci.yml`：每次推送自动运行测试

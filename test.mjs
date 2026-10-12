@@ -63,4 +63,33 @@ assert.ok(html.includes('企业 GEO-16 审计'));
 assert.ok(html.includes('enterpriseResults'));
 assert.match(inlineScript,/renderEnterprise/);
 
+
+import {buildComparison} from './compare.mjs';
+const competitorTechnical=analyzeHTML('<html lang="en"><head><title>Competitor Technical SEO GEO Example Site Optimized</title><meta name="description" content="A relevant and comprehensive example description that covers services in detail and provides accurate publicly verifiable information for visitors and search engines."><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><h1>Example rival business</h1><h2>Products</h2><a href="/products">Products</a></body></html>',{url:'https://rival.example.org/',robots:{status:200},sitemap:{status:200}});
+const comparison=buildComparison(result,competitorTechnical);
+assert.equal(comparison.kind,'geo-technical-comparison');
+assert.ok(comparison.rows.length>10);
+assert.equal(comparison.primary.url,'https://example.com/');
+assert.equal(comparison.competitor.url,'https://rival.example.org/');
+assert.equal(comparison.delta.score,result.score-competitorTechnical.score);
+assert.equal(comparison.rows.find(x=>x.id==='jsonld').verdict, 'ahead');
+assert.ok(comparison.rows.every(x=>['ahead','behind','tie','unverified'].includes(x.verdict)));
+assert.ok(comparison.opportunities.every(x=>x.evidencePrimary && x.evidenceCompetitor && x.action));
+assert.throws(()=>buildComparison(result,null));
+for(const body of [
+  {url:'https://example.com/',competitor:'http://127.0.0.1'},
+  {url:'https://example.com/',competitor:'https://www.example.com/'},
+  {url:'https://example.com/',competitor:''},
+]) {
+ const res=await handle(new Request('http://localhost/api/compare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}));
+ assert.equal(res.status,400);
+}
+const missingCompetitor=await handle(new Request('http://localhost/api/business-audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://example.com/',brand:'Example Brand',industry:'b2b',stage:'competitor'})}));
+assert.equal(missingCompetitor.status,400);
+const invalidMethod=await handle(new Request('http://localhost/api/compare'));
+assert.equal(invalidMethod.status,404);
+assert.ok(html.includes('竞品双站对比'));
+assert.ok(html.includes('compareResults'));
+assert.match(inlineScript,/renderCompare/);
+
 console.log('All assertions passed');

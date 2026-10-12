@@ -5,6 +5,7 @@ import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib';
 import { buildEnterpriseReport,validateBusinessProfile } from './enterprise.mjs';
+import { buildComparison } from './compare.mjs';
 
 const blocked = new BlockList();
 for (const [ip, mask] of [
@@ -213,20 +214,34 @@ header,.hero,.features,.footer,#results,#error,.reportActions{display:none!impor
 .panel *, .pillar *, .metric *{color:#161b29!important}
 .pillarGrid{grid-template-columns:1fr 1fr}
 }
-</style></head><body><div class="shell"><header><div class="logo"><span class="mark">↗</span> SEO<span style="color:#65e0c6">/</span>GEO Audit</div><span class="micro">v1.1 · Website Intelligence</span></header><section class="hero"><div class="eyebrow">TECHNICAL SEO × AI READINESS</div><h1>让网站更容易<br><span>被搜索发现 · 被 AI 理解</span></h1><p class="lead">输入网址，自动检测页面技术 SEO、Schema 结构化数据、实体信息和内容可理解性。提供明确的问题列表与修复建议。</p><div class="modeSwitch" role="group" aria-label="检测模式"><button type="button" class="modeBtn active" id="fastMode" aria-pressed="true">⚡ 快速技术检测</button><button type="button" class="modeBtn" id="businessMode" aria-pressed="false">▦ 企业 GEO-16 审计</button></div><form class="search" id="scanForm"><input id="urlInput" type="text" name="url" placeholder="输入网站，例如 example.com" required autocomplete="url" maxlength="2048" aria-label="网站地址"><button id="submitBtn" type="submit">开始免费检测 →</button></form><section class="businessFields hidden" id="businessFields" aria-label="企业审计信息"><div class="businessGrid"><label>企业 / 品牌名称 *<input form="scanForm" id="brandInput" name="brand" maxlength="100" placeholder="例如：XX 科技有限公司"></label><label>所属行业 *<select form="scanForm" id="industryInput" name="industry"><option value="b2b">B2B / 工业及外贸</option><option value="local">本地商家 / 专业服务</option><option value="ecommerce">电商零售</option><option value="media">内容媒体</option><option value="other">其他</option></select></label><label>工商主体（选填）<input form="scanForm" id="legalInput" maxlength="120" placeholder="企业工商登记全称"></label><label>经营地区（选填）<input form="scanForm" id="regionInput" maxlength="100" placeholder="例如：中国山东 / 全球"></label><label>线下实体门店<select form="scanForm" id="storeInput"><option value="no">否 / 不适用</option><option value="yes">有（本地实体信息待核验）</option></select></label><label>审计阶段<select form="scanForm" id="stageInput"><option value="baseline">首次诊断</option><option value="recheck">优化后复测（不自动读取历史）</option><option value="competitor">竞品研究（竞品未自动抓取）</option></select></label><label class="wide">目标搜索词 / 客户问题（选填）<textarea form="scanForm" id="keywordsInput" maxlength="500" placeholder="每行一个关键词或客户问题"></textarea></label><label class="wide">资质信息（选填，尚未核验）<input form="scanForm" id="credentialsInput" maxlength="300" placeholder="认证、资质或授权介绍"></label><label class="wide">竞品官网（选填，本版仅记录）<input form="scanForm" id="competitorInput" maxlength="400" placeholder="https://competitor.example"></label></div><p class="fine">仅检测公开网址；填写的企业资料由用户提供，不核验工商、第三方背书或 AI 真实引用。报告不在服务端持久保存。</p></section><p class="hint">无需注册 · 单页面检测 · 不保存检测网址 · 每次最多约 30 秒</p></section><div class="features"><span>✓ Technical SEO</span><span>✓ Schema / JSON-LD</span><span>✓ Entity Signals</span><span>✓ Robots / Sitemap</span><span>✓ 问题修复建议</span></div><div id="error" class="notice hidden" role="alert"></div><section id="results" class="results hidden" aria-live="polite"><div class="dashboard"><div class="panel scorebox"><h2 class="sectionTitle">综合技术就绪度</h2><div class="ring" id="ring"><div class="inner"><div><div id="score" class="scoreNumber">—</div><div class="scoreSmall">/ 100 分</div></div></div></div><p id="scoreTip" class="small"></p></div><div class="panel"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">检测概览</h2><button class="secondaryBtn" type="button" id="downloadBtn">下载 JSON 报告 ↓</button></div><p id="target" class="url"></p><div class="metrics"><div class="metric"><span>Technical SEO</span><strong id="seoScore">—</strong><span>70% 权重</span></div><div class="metric"><span>GEO Readiness</span><strong id="geoScore">—</strong><span>30% 权重</span></div><div class="metric"><span>待改进项</span><strong id="issuesCount">—</strong><span>警告及失败</span></div></div><p class="small">检测分数来自公开规则，不代表 Google 排名或 AI 平台引用概率。</p></div></div><div class="details"><div class="panel"><h2 class="sectionTitle">页面信息</h2><div id="facts"></div></div><div class="panel"><h2 class="sectionTitle">优先修复</h2><div id="priority" class="checkList"></div></div></div><div class="panel full"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">全部检测项</h2><span id="counts" class="small"></span></div><div id="checks" class="details" style="margin-top:14px"></div></div><p class="small" id="disclaimer" style="margin-top:15px"></p></section><section id="enterpriseResults" class="results hidden" aria-live="polite"><div class="panel"><div class="reportHeader"><div><h2 class="sectionTitle">企业 GEO-16 证据审计报告</h2><p id="enterpriseIdentity" class="enterpriseMeta"></p></div><div class="reportActions"><button type="button" class="secondaryBtn" id="enterpriseDownload">下载 JSON</button><button type="button" class="secondaryBtn" id="enterprisePrint">打印 / 保存 PDF</button></div></div><div class="enterpriseScoreGrid" id="enterpriseScores"></div><p id="enterpriseMethod" class="small"></p></div><div class="panel full"><h2 class="sectionTitle">优先整改 SOP（基于实测问题）</h2><div id="enterprisePriority" class="checkList"></div></div><div class="panel full"><h2 class="sectionTitle">16 维证据与核验状态</h2><div id="enterprisePillars" class="pillarGrid"></div></div><div class="panel full"><h2 class="sectionTitle">需人工补充核验</h2><div id="enterpriseManual" class="checkList"></div><p id="enterpriseDisclaimer" class="enterpriseFooter"></p></div></section><div class="footer">© 2026 SEO / GEO Audit · Created by <a href="https://github.com/wenlong1223" rel="noopener" target="_blank">wenlong1223</a><br>这是技术诊断工具，不提供排名保证；不执行全站爬虫扫描。</div></div><script data-cfasync="false">
+
+.comparePairs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+.compareSite{background:#122338;border:1px solid #2d485c;border-radius:12px;padding:17px;min-width:0}
+.compareSite strong{font-size:14px}.compareSite .siteUrl{font-size:12px;color:#87dfc4;overflow-wrap:anywhere;margin:8px 0}
+.compareSite .siteScore{font-size:31px;font-weight:800;margin:12px 0 3px}
+.comparisonScroll{overflow-x:auto}
+.comparisonTable{width:100%;border-collapse:collapse;min-width:650px;font-size:12px}
+.comparisonTable th,.comparisonTable td{border-bottom:1px solid #2c445c;padding:12px;text-align:left;vertical-align:top}
+.comparisonTable th{color:#9fbad4;white-space:nowrap}
+.comparisonTable td{color:#c7d8eb;overflow-wrap:anywhere;max-width:290px}
+.compareStat{color:#85decf}
+@media(max-width:760px){.comparePairs{grid-template-columns:1fr}}
+@media print{#compareResults{display:block!important;padding:0!important}#compareResults .panel,#compareResults .compareSite{background:#fff!important;border:1px solid #aaa!important;color:#161b29!important}#compareResults *{color:#161b29!important}.comparisonTable th,.comparisonTable td{border-color:#ccc!important}}
+</style></head><body><div class="shell"><header><div class="logo"><span class="mark">↗</span> SEO<span style="color:#65e0c6">/</span>GEO Audit</div><span class="micro">v1.2 · Website Intelligence</span></header><section class="hero"><div class="eyebrow">TECHNICAL SEO × AI READINESS</div><h1>让网站更容易<br><span>被搜索发现 · 被 AI 理解</span></h1><p class="lead">输入网址，自动检测页面技术 SEO、Schema 结构化数据、实体信息和内容可理解性。提供明确的问题列表与修复建议。</p><div class="modeSwitch" role="group" aria-label="检测模式"><button type="button" class="modeBtn active" id="fastMode" aria-pressed="true">⚡ 快速技术检测</button><button type="button" class="modeBtn" id="businessMode" aria-pressed="false">▦ 企业 GEO-16 审计</button><button type="button" class="modeBtn" id="compareMode" aria-pressed="false">⇄ 竞品双站对比</button></div><form class="search" id="scanForm"><input id="urlInput" type="text" name="url" placeholder="输入网站，例如 example.com" required autocomplete="url" maxlength="2048" aria-label="网站地址"><button id="submitBtn" type="submit">开始免费检测 →</button></form><section class="businessFields hidden" id="businessFields" aria-label="企业审计信息"><div class="businessGrid"><label>企业 / 品牌名称 *<input form="scanForm" id="brandInput" name="brand" maxlength="100" placeholder="例如：XX 科技有限公司"></label><label>所属行业 *<select form="scanForm" id="industryInput" name="industry"><option value="b2b">B2B / 工业及外贸</option><option value="local">本地商家 / 专业服务</option><option value="ecommerce">电商零售</option><option value="media">内容媒体</option><option value="other">其他</option></select></label><label>工商主体（选填）<input form="scanForm" id="legalInput" maxlength="120" placeholder="企业工商登记全称"></label><label>经营地区（选填）<input form="scanForm" id="regionInput" maxlength="100" placeholder="例如：中国山东 / 全球"></label><label>线下实体门店<select form="scanForm" id="storeInput"><option value="no">否 / 不适用</option><option value="yes">有（本地实体信息待核验）</option></select></label><label>审计阶段<select form="scanForm" id="stageInput"><option value="baseline">首次诊断</option><option value="recheck">优化后复测（不自动读取历史）</option><option value="competitor">竞品对比（真实抓取）</option></select></label><label class="wide">目标搜索词 / 客户问题（选填）<textarea form="scanForm" id="keywordsInput" maxlength="500" placeholder="每行一个关键词或客户问题"></textarea></label><label class="wide">资质信息（选填，尚未核验）<input form="scanForm" id="credentialsInput" maxlength="300" placeholder="认证、资质或授权介绍"></label><label class="wide">竞品官网（竞品对比阶段必填并真实抓取）<input form="scanForm" id="competitorInput" maxlength="400" placeholder="https://competitor.example"></label></div><p class="fine">仅检测公开网址；填写的企业资料由用户提供，不核验工商、第三方背书或 AI 真实引用。报告不在服务端持久保存。</p></section><section class="businessFields hidden" id="compareFields" aria-label="竞品双站对比"><div class="businessGrid"><label class="wide">竞品网址（必填）<input id="compareInput" type="url" maxlength="2048" placeholder="例如：https://example.org" aria-label="竞品网址"></label></div><p class="fine">本站网址使用上方输入框，双方将被真实抓取并按相同规则评分；比较仅代表所选页面技术状态。</p></section><p class="hint">无需注册 · 单站或双站公开页面检测 · 不保存检测网址</p></section><div class="features"><span>✓ Technical SEO</span><span>✓ Schema / JSON-LD</span><span>✓ Entity Signals</span><span>✓ Robots / Sitemap</span><span>✓ 问题修复建议</span></div><div id="error" class="notice hidden" role="alert"></div><section id="results" class="results hidden" aria-live="polite"><div class="dashboard"><div class="panel scorebox"><h2 class="sectionTitle">综合技术就绪度</h2><div class="ring" id="ring"><div class="inner"><div><div id="score" class="scoreNumber">—</div><div class="scoreSmall">/ 100 分</div></div></div></div><p id="scoreTip" class="small"></p></div><div class="panel"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">检测概览</h2><button class="secondaryBtn" type="button" id="downloadBtn">下载 JSON 报告 ↓</button></div><p id="target" class="url"></p><div class="metrics"><div class="metric"><span>Technical SEO</span><strong id="seoScore">—</strong><span>70% 权重</span></div><div class="metric"><span>GEO Readiness</span><strong id="geoScore">—</strong><span>30% 权重</span></div><div class="metric"><span>待改进项</span><strong id="issuesCount">—</strong><span>警告及失败</span></div></div><p class="small">检测分数来自公开规则，不代表 Google 排名或 AI 平台引用概率。</p></div></div><div class="details"><div class="panel"><h2 class="sectionTitle">页面信息</h2><div id="facts"></div></div><div class="panel"><h2 class="sectionTitle">优先修复</h2><div id="priority" class="checkList"></div></div></div><div class="panel full"><div class="toolbar"><h2 class="sectionTitle" style="margin:0">全部检测项</h2><span id="counts" class="small"></span></div><div id="checks" class="details" style="margin-top:14px"></div></div><p class="small" id="disclaimer" style="margin-top:15px"></p></section><section id="enterpriseResults" class="results hidden" aria-live="polite"><div class="panel"><div class="reportHeader"><div><h2 class="sectionTitle">企业 GEO-16 证据审计报告</h2><p id="enterpriseIdentity" class="enterpriseMeta"></p></div><div class="reportActions"><button type="button" class="secondaryBtn" id="enterpriseDownload">下载 JSON</button><button type="button" class="secondaryBtn" id="enterprisePrint">打印 / 保存 PDF</button></div></div><div class="enterpriseScoreGrid" id="enterpriseScores"></div><p id="enterpriseMethod" class="small"></p></div><div class="panel full"><h2 class="sectionTitle">优先整改 SOP（基于实测问题）</h2><div id="enterprisePriority" class="checkList"></div></div><div class="panel full"><h2 class="sectionTitle">16 维证据与核验状态</h2><div id="enterprisePillars" class="pillarGrid"></div></div><div class="panel full"><h2 class="sectionTitle">需人工补充核验</h2><div id="enterpriseManual" class="checkList"></div><p id="enterpriseDisclaimer" class="enterpriseFooter"></p></div></section><section id="compareResults" class="results hidden" aria-live="polite"><div class="panel"><div class="reportHeader"><div><h2 class="sectionTitle">竞品真实扫描 · 双站对比</h2><p id="compareMeta" class="enterpriseMeta"></p></div><div class="reportActions"><button class="secondaryBtn" type="button" id="compareDownload">下载对比 JSON</button><button class="secondaryBtn" type="button" id="comparePrint">打印 / 保存 PDF</button></div></div><div class="comparePairs" id="comparePairs"></div><div id="compareMetrics" class="enterpriseScoreGrid"></div><p id="compareMethod" class="small"></p></div><div class="panel full"><h2 class="sectionTitle">差距与优先整改建议</h2><div id="compareOpportunities" class="checkList"></div></div><div class="panel full"><h2 class="sectionTitle">逐项技术检测对照（有证据）</h2><div class="comparisonScroll"><table class="comparisonTable"><thead><tr><th>检查项</th><th>本站检测证据</th><th>竞品检测证据</th><th>结果</th></tr></thead><tbody id="compareRows"></tbody></table></div><p id="compareDisclaimer" class="enterpriseFooter"></p></div></section><div class="footer">© 2026 SEO / GEO Audit · Created by <a href="https://github.com/wenlong1223" rel="noopener" target="_blank">wenlong1223</a><br>这是技术诊断工具，不提供排名保证；不执行全站爬虫扫描。</div></div><script data-cfasync="false">
 const $=id=>document.getElementById(id);let currentReport=null;
 
 let selectedMode='fast';
 const chooseMode=m=>{
  selectedMode=m;
- $('fastMode').classList.toggle('active',m==='fast');$('businessMode').classList.toggle('active',m==='business');
- $('fastMode').setAttribute('aria-pressed',String(m==='fast'));$('businessMode').setAttribute('aria-pressed',String(m==='business'));
- $('businessFields').classList.toggle('hidden',m!=='business');
- $('submitBtn').textContent=m==='business'?'生成证据审计报告 →':'开始免费检测 →';
- $('results').classList.add('hidden');$('enterpriseResults').classList.add('hidden');$('error').classList.add('hidden');
+ $('fastMode').classList.toggle('active',m==='fast');$('businessMode').classList.toggle('active',m==='business');$('compareMode').classList.toggle('active',m==='compare');
+ $('fastMode').setAttribute('aria-pressed',String(m==='fast'));$('businessMode').setAttribute('aria-pressed',String(m==='business'));$('compareMode').setAttribute('aria-pressed',String(m==='compare'));
+ $('businessFields').classList.toggle('hidden',m!=='business');$('compareFields').classList.toggle('hidden',m!=='compare');
+ $('submitBtn').textContent=m==='business'?'生成证据审计报告 →':m==='compare'?'开始双站实测对比 →':'开始免费检测 →';
+ $('results').classList.add('hidden');$('enterpriseResults').classList.add('hidden');$('compareResults').classList.add('hidden');$('error').classList.add('hidden');
 };
 $('fastMode').addEventListener('click',()=>chooseMode('fast'));
 $('businessMode').addEventListener('click',()=>chooseMode('business'));
+$('compareMode').addEventListener('click',()=>chooseMode('compare'));
 const profileData=()=>({
  brand:$('brandInput').value,industry:$('industryInput').value,hasStore:$('storeInput').value==='yes',
  legalName:$('legalInput').value,region:$('regionInput').value,keywords:$('keywordsInput').value,
@@ -246,6 +261,7 @@ function renderEnterprise(d){
  for(const item of d.scope)missing.push('<div class="check"><strong>'+esc(item.label)+'</strong><p>'+esc(item.detail)+'</p></div>');
  $('enterpriseManual').innerHTML=missing.join('');
  $('enterpriseDisclaimer').textContent=d.disclaimer;
+ if(d.comparison)renderCompare(d.comparison,true);else $('compareResults').classList.add('hidden');
  $('enterpriseResults').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function saveJson(d,name){
@@ -255,11 +271,31 @@ function saveJson(d,name){
 $('enterpriseDownload').addEventListener('click',()=>{if(currentReport?.kind==='enterprise-geo-16')saveJson(currentReport,'geo-enterprise-audit')});
 $('enterprisePrint').addEventListener('click',()=>{if(currentReport?.kind==='enterprise-geo-16')window.print()});
 
+const compareFlag=v=>'<span class="flag '+esc(v)+'">'+({ahead:'本站领先',behind:'竞品领先',tie:'同级',unverified:'不适用/未知'}[v]||'未核验')+'</span>';
+const sideBox=(label,site)=>'<div class="compareSite"><strong>'+esc(label)+'</strong><p class="siteUrl">'+esc(site.url)+'</p><div class="siteScore">'+esc(site.score===null?'—':site.score)+'/100</div><p class="small">SEO '+esc(site.seoScore)+' · GEO '+esc(site.geoScore)+'</p><p class="small">页面标题：'+esc(site.summary.title||'缺失')+'</p><p class="small">Schema：'+esc((site.summary.schemaTypes||[]).join('、')||'未发现')+'</p></div>';
+function renderCompare(d,embedded=false){
+ if(!embedded){currentReport=d;$('results').classList.add('hidden');$('enterpriseResults').classList.add('hidden');}
+ $('compareResults').classList.remove('hidden');
+ $('compareMeta').textContent='双方独立抓取 · '+new Date(d.scannedAt).toLocaleString('zh-CN')+' · 同一套检测规则';
+ $('comparePairs').innerHTML=sideBox('本站',d.primary)+sideBox('竞品',d.competitor);
+ const difference=n=>n===null?'—':(n>0?'+'+n:String(n));
+ $('compareMetrics').innerHTML=reportCard('综合分差（本站－竞品）',difference(d.delta.score),'仅技术就绪度评分')+reportCard('SEO / GEO 分差',difference(d.delta.seo)+' / '+difference(d.delta.geo),'两站同规则')+reportCard('本站需追赶的检查项',String(d.summary.behind),'本站较差 '+d.summary.behind+' · 较好 '+d.summary.ahead);
+ $('compareMethod').textContent=d.methodology;
+ $('compareOpportunities').innerHTML=d.opportunities.length?d.opportunities.map(x=>'<div class="check"><strong>P'+x.order+' · '+esc(x.label)+'</strong><p>本站：'+esc(x.evidencePrimary)+'</p><p>竞品：'+esc(x.evidenceCompetitor)+'</p><p class="fix">优先建议：'+esc(x.action)+'</p></div>').join(''):'<p class="small">在双方可比检测项中，没有发现本站较竞品更差的项目；不表示实际排名领先。</p>';
+ const st={pass:'通过',warn:'警告',fail:'失败',na:'不适用'};
+ $('compareRows').innerHTML=d.rows.map(x=>'<tr><td>'+esc(x.group+' · '+x.label)+'</td><td><strong>'+esc(st[x.primary.status]||'未知')+'</strong><p>'+esc(x.primary.detail)+'</p></td><td><strong>'+esc(st[x.competitor.status]||'未知')+'</strong><p>'+esc(x.competitor.detail)+'</p></td><td>'+compareFlag(x.verdict)+'</td></tr>').join('');
+ $('compareDisclaimer').textContent=d.disclaimer;
+ if(!embedded)$('compareResults').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('compareDownload').addEventListener('click',()=>{if(currentReport?.comparison)saveJson(currentReport,'geo-enterprise-with-comparison');else if(currentReport?.kind==='geo-technical-comparison')saveJson(currentReport,'geo-competitor-comparison')});
+$('comparePrint').addEventListener('click',()=>window.print());
+
+
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const label={pass:'通过',warn:'建议优化',fail:'需要修复',na:'不适用'};
 const box=c=>'<div class="check"><div class="checkHead"><strong>'+esc(c.label)+'</strong><span class="flag '+esc(c.status)+'">'+label[c.status]+'</span></div><p>'+esc(c.detail)+'</p>'+(c.status==='pass'||c.status==='na'?'':'<p class="fix">建议：'+esc(c.fix)+'</p>')+'</div>';
 function render(d){currentReport=d;$('results').classList.remove('hidden');$('score').textContent=d.score;$('ring').style.setProperty('--pct',d.score);$('scoreTip').textContent=d.score>=85?'基础技术状况较好，继续验证搜索平台数据。':d.score>=60?'存在可改进项，建议先处理高权重问题。':'基础技术就绪度偏低，建议先修复错误项。';$('target').textContent=d.url;$('seoScore').textContent=d.seoScore;$('geoScore').textContent=d.geoScore;$('issuesCount').textContent=d.warnings+d.failed;$('counts').textContent='通过 '+d.passed+' · 警告 '+d.warnings+' · 失败 '+d.failed+' · 不适用 '+d.notApplicable;const s=d.summary;const facts=[['页面标题',s.title||'未设置'],['页面语言',s.language||'未设置'],['Canonical',s.canonical||'未设置'],['Schema 类型',s.schemaTypes.join('、')||'未检测到'],['图片',s.images+' 张（缺少 alt '+s.altMissing+' 张）'],['内部链接',s.internalLinks+' 个'],['robots.txt',s.robotsStatus??'不可获取'],['sitemap.xml',s.sitemapStatus??'不可获取'],['llms.txt（可选）',s.llmsStatus??'不可获取']];$('facts').innerHTML=facts.map(([a,b])=>'<div class="row"><span class="lbl">'+esc(a)+'</span><span class="val">'+esc(b)+'</span></div>').join('');$('priority').innerHTML=d.issues.length?d.issues.slice(0,5).map(box).join(''):'<p class="small">暂未发现需要处理的告警。</p>';$('checks').innerHTML=['SEO','GEO'].map(g=>'<div><h3 class="sectionTitle">'+(g==='SEO'?'Technical SEO':'GEO / Entity Readiness')+'</h3><div class="checkList">'+d.checks.filter(x=>x.group===g).map(box).join('')+'</div></div>').join('');$('disclaimer').textContent=d.disclaimer;$('results').scrollIntoView({behavior:'smooth',block:'start'});}
-$('scanForm').addEventListener('submit',async e=>{e.preventDefault();$('error').classList.add('hidden');const btn=$('submitBtn');btn.disabled=true;btn.textContent='正在安全扫描…';try{const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),35000);let r;try{const payload={url:$('urlInput').value,...(selectedMode==='business'?profileData():{})};r=await fetch(selectedMode==='business'?'/api/business-audit':'/api/audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:ctrl.signal});}finally{clearTimeout(to)}const data=await r.json().catch(()=>({error:'服务器返回了非 JSON 响应，可能被安全规则拦截'}));if(!r.ok)throw new Error(data.error||('HTTP '+r.status));if(selectedMode==='business')renderEnterprise(data);else render(data);}catch(err){$('error').textContent='检测失败：'+(err.name==='AbortError'?'请求超时，请稍后重试':err.message);$('error').classList.remove('hidden');}finally{btn.disabled=false;btn.textContent=selectedMode==='business'?'生成证据审计报告 →':'开始免费检测 →';}});
+$('scanForm').addEventListener('submit',async e=>{e.preventDefault();$('error').classList.add('hidden');const btn=$('submitBtn');btn.disabled=true;btn.textContent='正在安全扫描…';try{const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),selectedMode==='compare'||(selectedMode==='business'&&$('stageInput').value==='competitor')?45000:35000);let r;try{const payload={url:$('urlInput').value,...(selectedMode==='business'?profileData():selectedMode==='compare'?{competitor:$('compareInput').value}:{})};r=await fetch(selectedMode==='business'?'/api/business-audit':selectedMode==='compare'?'/api/compare':'/api/audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:ctrl.signal});}finally{clearTimeout(to)}const data=await r.json().catch(()=>({error:'服务器返回了非 JSON 响应，可能被安全规则拦截'}));if(!r.ok)throw new Error(data.error||('HTTP '+r.status));if(selectedMode==='business')renderEnterprise(data);else if(selectedMode==='compare')renderCompare(data);else render(data);}catch(err){$('error').textContent='检测失败：'+(err.name==='AbortError'?'请求超时，请稍后重试':err.message);$('error').classList.remove('hidden');}finally{btn.disabled=false;btn.textContent=selectedMode==='business'?'生成证据审计报告 →':selectedMode==='compare'?'开始双站实测对比 →':'开始免费检测 →';}});
 $('downloadBtn').addEventListener('click',()=>{if(!currentReport)return;const blob=new Blob([JSON.stringify(currentReport,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seo-geo-audit-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);});
 </script></body></html>`;
 
@@ -269,15 +305,41 @@ const lastScans=[];
 async function handle(req) {
   const path=new URL(req.url).pathname;
   if(req.method==='GET'&&path==='/') return new Response(HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
-  if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.1.0'});
-  if(req.method!=='POST'||!['/api/audit','/api/business-audit'].includes(path))return json({error:'Not found'},404);
-  const now=Date.now();while(lastScans.length&&lastScans[0]<now-60000)lastScans.shift();
-  if(active>=3||lastScans.length>=18)return json({error:'当前扫描请求较多，请一分钟后再试'},429);
+  if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.2.0'});
+  if(req.method!=='POST'||!['/api/audit','/api/business-audit','/api/compare'].includes(path))return json({error:'Not found'},404);
   if(Number(req.headers.get('content-length')||0)>4096)return json({error:'请求过大'},413);
   let payload;try{const raw=await req.text();if(raw.length>4096)return json({error:'请求过大'},413);payload=JSON.parse(raw);}catch{return json({error:'请提交合法 JSON 请求体'},400)}
-  try{normalizeURL(payload?.url);if(path==='/api/business-audit')validateBusinessProfile(payload);}catch(err){return json({error:String(err.message).slice(0,240)},400)}
-  active++;lastScans.push(now);
-  try{const scanned=await audit(payload.url);return json(path==='/api/business-audit'?buildEnterpriseReport(scanned,payload):scanned);}catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}finally{active--}
+  let pair=false;
+  try {
+    const primary=normalizeURL(payload?.url);
+    if(path==='/api/business-audit')validateBusinessProfile(payload);
+    pair=path==='/api/compare'||(path==='/api/business-audit'&&payload.stage==='competitor');
+    if(pair){
+      if(!payload?.competitor)throw new Error('请填写竞品的完整公网网址');
+      const competitor=normalizeURL(payload.competitor);
+      if(primary.hostname.replace(/^www\./,'')===competitor.hostname.replace(/^www\./,''))
+        throw new Error('请填写不同网站的竞品网址');
+    }
+  }catch(err){return json({error:String(err.message).slice(0,240)},400)}
+  const now=Date.now();while(lastScans.length&&lastScans[0]<now-60000)lastScans.shift();
+  const cost=pair?2:1;
+  if(active+cost>3||lastScans.length+cost>18)return json({error:'当前扫描请求较多，请一分钟后再试'},429);
+  active+=cost;for(let i=0;i<cost;i++)lastScans.push(now);
+  try{
+    if(pair) {
+      const [a,b]=await Promise.allSettled([audit(payload.url),audit(payload.competitor)]);
+      if(a.status==='rejected')throw new Error('本站抓取失败：'+String(a.reason?.message||a.reason));
+      if(b.status==='rejected')throw new Error('竞品抓取失败：'+String(b.reason?.message||b.reason));
+      const comparison=buildComparison(a.value,b.value);
+      if(path==='/api/compare')return json(comparison);
+      const report=buildEnterpriseReport(a.value,payload);
+      report.comparison=comparison;
+      return json(report);
+    }
+    const scanned=await audit(payload.url);
+    return json(path==='/api/business-audit'?buildEnterpriseReport(scanned,payload):scanned);
+  }catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}
+  finally{active-=cost}
 }
 if(typeof Bun!=='undefined')Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
 export {normalizeURL,analyzeHTML,handle,audit};

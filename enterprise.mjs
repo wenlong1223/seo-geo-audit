@@ -52,19 +52,19 @@ export function buildEnterpriseReport(technical,rawProfile) {
   const verified=pillars.filter(x=>x.score!==null);
   const verifiedScore=verified.length?Math.round(verified.reduce((a,x)=>a+x.score,0)/verified.length):null;
   const scope=[{label:'企业基本资料',state:'self_reported',detail:'客户自行填写，未执行工商或资质核验'}];
-  if(p.competitor)scope.push({label:'竞品对比',state:'not_checked',detail:'竞品仅用于记录，尚未抓取或打分'});
+  if(p.competitor)scope.push({label:'竞品对比',state:p.stage==='competitor'?'checked':'not_checked',detail:p.stage==='competitor'?'已使用同一规则抓取并对比两个公开页面及有限约定路径':'仅记录竞品网址，未选择竞品对比阶段'});
   if(p.hasStore)scope.push({label:'本地商家扩展',state:'not_checked',detail:'线下地址、地图 POI 和 NAP 跨平台一致性尚未核验'});
   const priority=pillars.filter(x=>x.status==='fail'||x.status==='warn').sort((a,b)=>(a.status==='fail'?-1:1)-(b.status==='fail'?-1:1)).slice(0,8).map((x,i)=>({order:i+1,title:x.label,action:x.fix,evidence:x.evidence,status:x.status}));
   const manual=pillars.filter(x=>x.status==='unknown').map(x=>({title:x.label,action:x.fix}));
   if(p.hasStore) manual.push({title:'本地实体信息',action:'线下门店地址、电话、营业时间及地图 POI 需人工交叉核验。'});
   return {
-    kind:'enterprise-geo-16',version:'1.1.0',scannedAt:technical.scannedAt||new Date().toISOString(),
+    kind:'enterprise-geo-16',version:'1.2.0',scannedAt:technical.scannedAt||new Date().toISOString(),
     website:technical.url,profile:p,
     verifiedScore,verifiedCount:verified.length,totalCount:16,coverage:Math.round(verified.length/16*100),
     seoScore:technical.seoScore,geoTechnicalScore:technical.geoScore,
     technicalStatus:technical.status,pillars,priority,manual,scope,
     summary:technical.summary,
     methodology:'自定义 16 维技术与业务证据映射。仅对可观察维度计分，pass=100、warn=50、fail=0，未知项不计入均分；覆盖率单独显示。非学术 GEO-16 评分公式。',
-    disclaimer:'仅检查所输入的公开页面及少量约定路径；不执行整站爬取、工商资质核验、竞品扫描、AI 引用率监测或真实搜索排名测量。品牌及行业信息均由用户提供，未独立核实。分数不是任何 AI 平台推荐概率。'
+    disclaimer:'仅检查所输入的公开页面及少量约定路径；不执行整站爬取、工商资质核验、未选择对比时不扫描竞品、AI 引用率监测或真实搜索排名测量。品牌及行业信息均由用户提供，未独立核实。分数不是任何 AI 平台推荐概率。'
   };
 }
