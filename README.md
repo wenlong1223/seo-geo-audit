@@ -16,6 +16,23 @@
 
 **注意：** GEO 分数只代表结构化信息与技术就绪度，**不代表** Google 收录、SEO 排名、AI 平台真实引用率或任何商业效果保证。当前版本不运行 JS 渲染器，也不执行深度全站爬取。
 
+## 企业 GEO-16 审计模式（v1.1）
+
+通过页面顶部切换 **企业 GEO-16 审计**，填写品牌名称、行业、目标关键词、主体名称及可选竞品信息，生成含 **16 个参考维度、抓取证据、待核验状态、优先整改 SOP、JSON 下载、打印/保存 PDF** 的企业报告。
+
+- **证据优先：** 实测通过 / 待修复 / 建议优化 / 待核验，未知项不计分，并独立展示覆盖率；
+- **仅公开页面：** 仍不做全站、品牌工商查询、竞争对手抓取或真正 AI 引用测试；
+- **规则驱动：** 目前不接入大模型 API，不自动生成没有事实依据的 AI 分数；
+- **评分说明：** 自定义 16 维映射，不等于学术 GEO-16 原始评分公式。
+
+**新增 API：** POST `/api/business-audit`，JSON 示例：
+
+```json
+{"url":"https://example.com","brand":"Example Brand","industry":"b2b","hasStore":false}
+```
+
+**部署安全：** 如果使用 Cloudflare WAF，须将该 API 加入与 `/api/audit` 相同的限流规则。
+
 ## 立即体验
 
 **在线网页：** https://geo.zwlla.com/
@@ -83,6 +100,7 @@ node test.mjs
 
 - `index.ts`：线上 Railway 服务构建使用的 Bun / TypeScript 完整源码
 - `index.mjs`：同一份源码的 Node.js ESM 测试镜像
+- `enterprise.mjs`：企业资料校验、16 维证据报告和整改建议映射
 - `test.mjs`：本地功能和安全回归断言
 - `.github/workflows/ci.yml`：每次推送自动运行测试
 

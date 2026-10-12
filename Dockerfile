@@ -1,6 +1,6 @@
 FROM oven/bun:1
 WORKDIR /app
-COPY --chown=bun:bun index.ts ./
+COPY --chown=bun:bun index.ts enterprise.mjs ./
 USER bun
 ENV PORT=3000
 EXPOSE 3000

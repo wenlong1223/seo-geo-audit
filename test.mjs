@@ -42,4 +42,25 @@ assert.ok(inlineScript, 'inline scan form controller exists');
 assert.doesNotThrow(() => new vm.Script(inlineScript), 'scan form controller parses');
 assert.match(page.headers.get('content-security-policy') || '', /script-src 'self' 'unsafe-inline'/);
 assert.match(inlineScript, /scanForm.*addEventListener/);
+
+import { buildEnterpriseReport,validateBusinessProfile } from './enterprise.mjs';
+const profile={brand:'Example Brand',industry:'b2b',hasStore:false,keywords:'工业产品如何选型'};
+const enterprise=buildEnterpriseReport(result,profile);
+assert.equal(enterprise.kind,'enterprise-geo-16');
+assert.equal(enterprise.pillars.length,16);
+assert.equal(enterprise.coverage,Math.round(enterprise.verifiedCount/16*100));
+assert.ok(enterprise.pillars.some(x=>x.status==='unknown'&&x.score===null));
+assert.equal(enterprise.profile.industryLabel,'B2B / 工业及外贸');
+assert.ok(enterprise.priority.every(x=>x.evidence&&x.action));
+assert.throws(()=>validateBusinessProfile({brand:'X',industry:'b2b'}));
+assert.throws(()=>validateBusinessProfile({brand:'Example',industry:'none'}));
+assert.throws(()=>validateBusinessProfile({brand:'Example',industry:'b2b',competitor:'http://localhost'}));
+const invalidBusiness=await handle(new Request('http://localhost/api/business-audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://example.com',brand:'x',industry:'b2b'})}));
+assert.equal(invalidBusiness.status,400);
+const noScan=await handle(new Request('http://localhost/api/business-audit',{method:'GET'}));
+assert.equal(noScan.status,404);
+assert.ok(html.includes('企业 GEO-16 审计'));
+assert.ok(html.includes('enterpriseResults'));
+assert.match(inlineScript,/renderEnterprise/);
+
 console.log('All assertions passed');
