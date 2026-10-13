@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
 import { normalizeURL, analyzeHTML, handle } from './index.mjs';
 
 const clean = '<!doctype html><html lang="zh-CN"><head><title>示例企业网站 SEO GEO 技术优化方案</title><meta name="description" content="这是一个完整的企业网站服务介绍，涵盖网站开发、技术 SEO 优化、实体结构化数据建设与项目技术交付，并且提供丰富的实操指导信息。"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="canonical" href="https://example.com/"><meta property="og:title" content="example"><meta property="og:description" content="description"><script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","sameAs":["https://example.org/"]}</script></head><body><h1>企业网站服务</h1><h2>详细服务说明</h2><img alt="说明图" src="/one.png"><a href="/a">a</a><a href="/b">b</a><a href="/c">c</a></body></html>';
@@ -92,4 +93,8 @@ assert.ok(html.includes('竞品双站对比'));
 assert.ok(html.includes('compareResults'));
 assert.match(inlineScript,/renderCompare/);
 
+
+const dockerSource=readFileSync(new URL('./Dockerfile',import.meta.url),'utf8');
+assert.match(dockerSource,/COPY[^\n]*index\.ts[^\n]*enterprise\.mjs[^\n]*compare\.mjs/);
+assert.ok(html.includes('@media print{#enterpriseResults.hidden,#compareResults.hidden{display:none!important}}'));
 console.log('All assertions passed');
