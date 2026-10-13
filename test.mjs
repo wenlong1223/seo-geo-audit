@@ -95,6 +95,27 @@ assert.match(inlineScript,/renderCompare/);
 
 
 const dockerSource=readFileSync(new URL('./Dockerfile',import.meta.url),'utf8');
-assert.match(dockerSource,/COPY[^\n]*index\.ts[^\n]*enterprise\.mjs[^\n]*compare\.mjs/);
+assert.match(dockerSource,/COPY[^\n]*index\.ts[^\n]*enterprise\.mjs[^\n]*compare\.mjs[^\n]*site\.mjs/);
 assert.ok(html.includes('@media print{#enterpriseResults.hidden,#compareResults.hidden{display:none!important}}'));
+
+import {collectSiteLinks,buildSiteReport} from './site.mjs';
+const sampleLinks='<a href="/services">Services</a><a href="https://other.org">out</a><a href="/about">About</a><a href="/services?x=1">query</a><a href="/wp-admin/">Admin</a><a href="/a.pdf">pdf</a><a href="#block">anchor</a><a href="/contact">Contact</a>';
+assert.deepEqual(collectSiteLinks(sampleLinks,'https://example.com/'),['https://example.com/services','https://example.com/about','https://example.com/contact']);
+assert.deepEqual(collectSiteLinks('<a href="//evil.com/secret">outside</a>','https://example.com/'),[]);
+const second=analyzeHTML(clean,{url:'https://example.com/services',robots:{status:200},sitemap:{status:200}});
+const multi=buildSiteReport('https://example.com/',[result,second],[],5,4);
+assert.equal(multi.kind,'geo-multipage-audit');
+assert.equal(multi.scannedPages,2);
+assert.equal(multi.average.score,Math.round((result.score+second.score)/2));
+assert.ok(multi.findings.some(f=>f.id==='duplicate-title'&&f.count===2));
+assert.ok(multi.findings.some(f=>f.id==='duplicate-description'&&f.count===2));
+assert.throws(()=>buildSiteReport('https://example.com',[],[],5,0));
+for(const maxPages of [0,1,4,6,500,'5']){
+ const invalid=await handle(new Request('http://localhost/api/site-audit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://example.com',maxPages})}));
+ assert.equal(invalid.status,400);
+}
+assert.equal((await handle(new Request('http://localhost/api/site-audit'))).status,404);
+assert.ok(html.includes('站内多页面审计'));
+assert.match(inlineScript,/renderSite/);
+
 console.log('All assertions passed');

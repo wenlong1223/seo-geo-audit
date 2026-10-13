@@ -31,7 +31,7 @@
 {"url":"https://example.com","brand":"Example Brand","industry":"b2b","hasStore":false}
 ```
 
-**部署安全：** 如果使用 Cloudflare WAF，须将该 API 和 `/api/compare` 加入与 `/api/audit` 相同的限流规则。
+**部署安全：** 如果使用 Cloudflare WAF，须将该 API、`/api/compare` 和 `/api/site-audit` 加入与 `/api/audit` 相同的限流规则。
 
 
 ## 双站真实扫描对比（v1.2）
@@ -48,6 +48,18 @@
 两站分别限制公网域名、DNS 公网地址校验、超时、大小、重定向、并发；双站对比占用 2 个扫描额度，且受 Cloudflare 同一 IP 限流保护。如果任一网站无法访问，将标明失败方，不生成虚假的对照分数。
 
 **重要边界：** 对比仅衡量所选页面的技术就绪度；不代表关键词排名、搜索流量、真实 AI 引用率或全站综合实力。对于不适用/无法核验的项目不判定谁领先。
+
+## 站内多页面审计（v1.3）
+
+首页选择「站内多页面审计」，输入一个公网 URL，选择最多 3 或 5 页。工具从入口页的静态 HTML 链接发现同源页面，最多两页并发抓取，生成：
+- 页面级 Technical SEO/GEO 分数、问题与整改建议。
+- 已成功检测页面的平均分、失败页面、发现链接数。
+- 重复 Title/Description、缺失字段、noindex 和缺少 JSON-LD 的抽样统计。
+- 可打印报告和 JSON 下载。
+
+API：POST /api/site-audit；请求体示例：{"url":"https://example.com","maxPages":5}。
+
+安全边界：这是最多 5 页的有限采样，默认 5 页；同源链接不够时少于 5 页。对每个 URL 复用 SSRF 与 DNS 公网校验、同源跳转限制、响应大小及请求超时。单次任务占用 3 个应用并发额度，并受 Cloudflare API 限速保护。不执行 JS 渲染、不登录、不进行全站抓取，不代表排名或 AI 实际引用率。
 
 ## 立即体验
 
@@ -117,6 +129,7 @@ node test.mjs
 - `index.ts`：线上 Railway 服务构建使用的 Bun / TypeScript 完整源码
 - `index.mjs`：同一份源码的 Node.js ESM 测试镜像
 - `compare.mjs`：两个真实技术扫描结果的差异分析与整改优先级
+- `site.mjs`：安全的站内链接发现与多页面审计汇总
 - `enterprise.mjs`：企业资料校验、16 维证据报告和整改建议映射
 - `test.mjs`：本地功能和安全回归断言
 - `.github/workflows/ci.yml`：每次推送自动运行测试
