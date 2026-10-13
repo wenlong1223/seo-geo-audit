@@ -6,6 +6,7 @@ import { BlockList, isIP } from 'node:net';
 import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib';
 import { buildEnterpriseReport,validateBusinessProfile } from './enterprise.mjs';
 import { buildComparison } from './compare.mjs';
+import { collectSiteLinks,buildSiteReport } from './site.mjs';
 
 const blocked = new BlockList();
 for (const [ip, mask] of [
@@ -77,9 +78,10 @@ async function oneRequest(u) {
     req.end();
   });
 }
-async function fetchSafe(url) {
+async function fetchSafe(url,allowedOrigin=null) {
   let u = normalizeURL(url); let hops = 0;
   while (true) {
+    if(allowedOrigin && u.origin!==allowedOrigin)throw new Error('站内采样拒绝跨站跳转');
     const response = await oneRequest(u);
     if ([301,302,303,307,308].includes(response.status) && response.headers.location) {
       if (++hops > MAX_REDIRECTS) throw new Error('跳转次数过多');
@@ -175,6 +177,35 @@ async function audit(input) {
   const probe=async path=>{try{return await fetchSafe(origin+path)}catch{return null}};
   const [robots,sitemap,llms]=await Promise.all([probe('/robots.txt'),probe('/sitemap.xml'),probe('/llms.txt')]);
   return analyzeHTML(main.body,{url:main.url,status:main.status,headers:main.headers,robots,sitemap,llms,redirects:main.redirects});
+}
+
+async function siteAudit(input,maxPages=5){
+ const requested=normalizeURL(input);
+ const entry=await fetchSafe(requested.href);
+ if(entry.status>=400)throw new Error('入口页面返回 HTTP '+entry.status);
+ const contentType=String(entry.headers['content-type']||'');
+ if(contentType&&!/(text\/html|application\/xhtml\+xml)/i.test(contentType))throw new Error('入口不是 HTML 页面');
+ const origin=new URL(entry.url).origin;
+ const probe=async path=>{try{return await fetchSafe(origin+path,origin)}catch{return null}};
+ const [robots,sitemap,llms]=await Promise.all([probe('/robots.txt'),probe('/sitemap.xml'),probe('/llms.txt')]);
+ const first=analyzeHTML(entry.body,{url:entry.url,status:entry.status,headers:entry.headers,robots,sitemap,llms,redirects:entry.redirects});
+ const candidates=collectSiteLinks(entry.body,entry.url,40);
+ const selected=candidates.slice(0,maxPages-1),reports=[first],failures=[];
+ const scan=async url=>{
+  try{
+   const fetched=await fetchSafe(url,origin);
+   if(fetched.status>=400)throw new Error('HTTP '+fetched.status);
+   const ct=String(fetched.headers['content-type']||'');
+   if(ct&&!/(text\/html|application\/xhtml\+xml)/i.test(ct))throw new Error('非 HTML 页面');
+   const report=analyzeHTML(fetched.body,{url:fetched.url,status:fetched.status,headers:fetched.headers,robots,sitemap,llms,redirects:fetched.redirects});
+   return {report};
+  }catch(e){return {failure:{url,error:String(e?.message||'抓取失败').slice(0,180)}};}
+ };
+ for(let i=0;i<selected.length;i+=2){
+  const batch=await Promise.all(selected.slice(i,i+2).map(scan));
+  for(const item of batch)if(item.report)reports.push(item.report);else failures.push(item.failure);
+ }
+ return buildSiteReport(entry.url,reports,failures,maxPages,candidates.length);
 }
 
 const HTML = `<!doctype html>
@@ -306,13 +337,14 @@ const lastScans=[];
 async function handle(req) {
   const path=new URL(req.url).pathname;
   if(req.method==='GET'&&path==='/') return new Response(HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
-  if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.2.0'});
-  if(req.method!=='POST'||!['/api/audit','/api/business-audit','/api/compare'].includes(path))return json({error:'Not found'},404);
+  if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.3.0'});
+  if(req.method!=='POST'||!['/api/audit','/api/business-audit','/api/compare','/api/site-audit'].includes(path))return json({error:'Not found'},404);
   if(Number(req.headers.get('content-length')||0)>4096)return json({error:'请求过大'},413);
   let payload;try{const raw=await req.text();if(raw.length>4096)return json({error:'请求过大'},413);payload=JSON.parse(raw);}catch{return json({error:'请提交合法 JSON 请求体'},400)}
   let pair=false;
   try {
     const primary=normalizeURL(payload?.url);
+    if(path==='/api/site-audit' && ![3,5].includes(payload.maxPages??5))throw new Error('每次最多检测 3 或 5 页');
     if(path==='/api/business-audit')validateBusinessProfile(payload);
     pair=path==='/api/compare'||(path==='/api/business-audit'&&payload.stage==='competitor');
     if(pair){
@@ -323,10 +355,11 @@ async function handle(req) {
     }
   }catch(err){return json({error:String(err.message).slice(0,240)},400)}
   const now=Date.now();while(lastScans.length&&lastScans[0]<now-60000)lastScans.shift();
-  const cost=pair?2:1;
+  const cost=path==='/api/site-audit'?3:pair?2:1;
   if(active+cost>3||lastScans.length+cost>18)return json({error:'当前扫描请求较多，请一分钟后再试'},429);
   active+=cost;for(let i=0;i<cost;i++)lastScans.push(now);
   try{
+    if(path==='/api/site-audit')return json(await siteAudit(payload.url,payload.maxPages??5));
     if(pair) {
       const [a,b]=await Promise.allSettled([audit(payload.url),audit(payload.competitor)]);
       if(a.status==='rejected')throw new Error('本站抓取失败：'+String(a.reason?.message||a.reason));
@@ -343,4 +376,4 @@ async function handle(req) {
   finally{active-=cost}
 }
 if(typeof Bun!=='undefined')Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
-export {normalizeURL,analyzeHTML,handle,audit};
+export {normalizeURL,analyzeHTML,handle,audit,siteAudit};
