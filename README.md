@@ -137,3 +137,28 @@ node test.mjs
 **作者：** [wenlong1223](https://github.com/wenlong1223)  
 **许可证：** MIT
 
+
+
+## IIBD · 行业情报与商业决策工作台（实验性集成）
+
+**入口：** `/intelligence`。与原 SEO/GEO Audit 共用 Railway/Bun 服务，无需另开 Streamlit/Python 服务，也不影响现有四种检测模式。
+
+功能：
+- 研究主体 + 最多16家竞品清单，分直接竞品、间接竞品、参考标杆。
+- **真实技术采集**：单次最多扫描研究主体和两家竞品，复用原站 SSRF 防护与扫描规则，允许部分目标失败。
+- **十维证据矩阵**：目标客户、产品、定价、履约、集成、获客、内容、转化、口碑、风险；未采集不等于不支持。
+- 业务证据手工登记（可添加来源 URL；仍标记人工待核验）；证据来源可回查。
+- 行动卡、Markdown/JSON 导出；**无数据库、无自动市场数据 API、无生成式 AI**。
+
+**接口：**
+```bash
+curl -X POST https://geo.zwlla.com/api/intelligence/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"86DROP","industry":"跨境电商履约","companies":[{"name":"Competitor A","kind":"direct"}],"records":[]}'
+```
+
+注意：本模块无法凭网页技术扫描得出真实市场规模、搜索量、客户LTV、营收、转化率或商家商业竞争力；缺数据明确留白。当前报告只在当前页面/响应中，需主动下载，服务端不长期保存。
+
+开发和后续架构说明：[`docs/IIBD_V2_GEO_集成与后续开发.md`](docs/IIBD_V2_GEO_集成与后续开发.md)。
+
+线上 WAF 部署需把 `/api/intelligence/scan` 纳入扫描速率限制，并给 `/api/intelligence/analyze` 单独设置请求频率及大小上限。正式部署前检查 PR CI、Railway 健康状态和旧页面功能。
