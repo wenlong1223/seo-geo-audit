@@ -18,7 +18,7 @@ const repeated=await req('POST','/api/kb/import',{files});assert.equal(repeated.
 const stats=await req('GET','/api/kb/stats');assert.equal(stats.data.entities,2);assert.equal(stats.data.versions,2);
 const listed=await req('GET','/api/kb/entities?industry=SMT');assert.equal(listed.data.entities.length,2);
 const entity=listed.data.entities.find(x=>x.type==='pain');
-const details=await req('GET','/api/kb/entity?id='+entity.id);assert.equal(details.data.title,'SMT问题');
+const details=await req('GET','/api/kb/entity?id='+entity.id);assert.equal(details.data.title,'SMT换模时间长');
 const relations=await req('GET','/api/kb/relations?id='+entity.id);assert.equal(relations.data.links.length,1);
 assert.equal(relations.data.links[0].resolved.title,'SMED快速换模');
 const report=await req('POST','/api/kb/proposal',{ids:listed.data.entities.map(x=>x.id),pain:'SMT生产切换较慢',industry:'SMT'});
