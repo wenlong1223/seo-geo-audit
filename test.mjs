@@ -139,15 +139,19 @@ assert.ok(!emptyResearch.markdown.includes('竞品没有'));
 const dataResearch=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'Rival'}],records:[
  {company:'Rival',dimension:'pricing',claim:'官网提供询价入口，费用尚未确认',sourceUrl:'https://competitor.example/pricing',origin:'user'},
  {company:'86DROP',dimension:'content',claim:'缺少 JSON-LD',sourceUrl:'https://www.86drop.com/',origin:'scanner'}]});
-assert.equal(dataResearch.coverage.measured,1);
+assert.equal(dataResearch.coverage.measured,0); // client-supplied origin cannot claim measured evidence
 assert.equal(dataResearch.records[0].status,'cited-unverified');
-assert.equal(dataResearch.records[1].status,'measured');
+assert.equal(dataResearch.records[1].status,'cited-unverified');
 assert.ok(dataResearch.markdown.includes('CLM-001'));
 assert.throws(()=>analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'86DROP'}]}));
 assert.throws(()=>analyzeIntelligence({subject:'86DROP',industry:'跨境履约',records:[{company:'86DROP',dimension:'pricing',claim:'低价',sourceUrl:'javascript:alert(1)'}]}));
 const fromScan=buildScanResearch({subject:'86DROP',industry:'跨境履约'},[{name:'86DROP',kind:'self',url:'https://example.com/',report:result},{name:'Competitor',kind:'direct',url:'https://competitor.example/',error:'Timeout'}]);
 assert.equal(fromScan.scans.length,2);
 assert.equal(fromScan.coverage.measured>0,true);
+const attested=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',records:fromScan.records.map(x=>({...x,company:'86DROP'}))});
+assert.equal(attested.coverage.measured,fromScan.coverage.measured);
+const forged=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',records:[{...fromScan.records[0],claim:'伪造的价格数据'}]});
+assert.equal(forged.coverage.measured,0);
 assert.ok(fromScan.records.every(x=>x.sourceUrl==='https://example.com/'));
 const postAnalysis=await handle(new Request('http://localhost/api/intelligence/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subject:'86DROP',industry:'跨境履约',companies:[],records:[]})}));
 assert.equal(postAnalysis.status,200);
