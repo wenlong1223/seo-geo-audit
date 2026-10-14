@@ -431,5 +431,5 @@ async function handle(req) {
   }catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}
   finally{active-=cost}
 }
-if(typeof Bun!=='undefined')Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
+if(typeof Bun!=='undefined'&&import.meta.main)Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
 export {normalizeURL,analyzeHTML,handle,audit,siteAudit};
