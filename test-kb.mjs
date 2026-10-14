@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import {parseObsidianNote,buildGroundedProposal} from './kb-core.mjs';
 import {verifyKnowledgeAnswer} from './kb-ai.mjs';
 import {handle} from './index.mjs';
-const note=\`---
+const note=`---
 type: pain
 industry: SMT电子组装
 status: reviewed
@@ -16,7 +16,7 @@ source_url: https://example.org/reference
 该客户在多种产品切换中需要观察换线时间和操作流程；记录为匿名示例，暂未提供实测数值。
 相关方案：[[SMED快速换模|快速换模]]
 causes:: [[产线等待]]
-\`;
+`;
 const e=parseObsidianNote({path:'01-行业知识/SMT换模问题.md',content:note});
 assert.equal(e.type,'pain');assert.equal(e.industry,'SMT电子组装');assert.equal(e.status,'reviewed');
 assert.equal(e.links.length,3);assert.ok(e.links.some(x=>x.kind==='causes'&&x.target==='产线等待'));
