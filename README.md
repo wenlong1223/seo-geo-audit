@@ -162,3 +162,41 @@ curl -X POST https://geo.zwlla.com/api/intelligence/analyze \
 开发和后续架构说明：[`docs/IIBD_V2_GEO_集成与后续开发.md`](docs/IIBD_V2_GEO_集成与后续开发.md)。
 
 线上 WAF 部署需把 `/api/intelligence/scan` 纳入扫描速率限制，并给 `/api/intelligence/analyze` 单独设置请求频率及大小上限。正式部署前检查 PR CI、Railway 健康状态和旧页面功能。
+
+## IIBD V2.1：16 家竞品采集、SQLite 数据库、带来源 AI 研究
+
+在 `/intelligence` 页面下方使用 **长期研究项目**。
+
+本版本由原站 Bun 服务直接实现，不部署第二套 Streamlit：
+- **16 家竞品**：从已有清单创建项目，逐批扫描最多 2 家，页面自动循环批次并显示失败结果；服务端每批持久化进度，即使关闭页面也能下次继续。
+- **公开来源抽取**：安全检查 URL 与 DNS，读取指定网站首页与最多 1 个相关公开页面，提取页面标题、Meta Description、H1/H2/H3、部分履约/集成/报价相关原文；部分被屏蔽的网站标记失败。公开文字仅证明网页这样写，不证明商家实际履约能力。
+- **SQLite WAL 持久存储**：`research_projects`、`research_companies`、`research_evidence`、`research_ai_reports`，按项目隔离、来源字段、状态和时间戳保存。数据文件路径由 `IIBD_DB_PATH` 配置，必须位于 Railway 已挂载持久卷中。
+- **来源核验**：人工录入的网页原文需 URL 可达且逐字匹配才算 `quote-matched`；否则为 `unverified`，不会成为 AI 的事实素材。
+- **AI 调用**：仅提交带公开原文和证据 ID 的经过核验片段。服务端审核 AI 输出的每个 source_id 必须属于输入素材，没有有效引用的洞察会被删除。引用有效不保证推论正确，仍需终审。
+- **旧 GEO Audit**：原来的四种技术审计和 /api/intelligence/analyze 不变。
+
+### 必须配置的 Railway 变量
+| 变量 | 用途 |
+| --- | --- |
+| `IIBD_ADMIN_TOKEN` | 长度 ≥24 的随机管理员 Bearer Token；只在管理员表单中输入，不要写进 GitHub 源码 |
+| `IIBD_DB_PATH` | 指向持久卷，如 `/data/iibd-research.sqlite` |
+| `RAILWAY_RUN_UID` | Railway 根属主持久卷的访问兼容性，当前设 `0`，请尽可能采用单独最小权限服务隔离 |
+| `OPENAI_API_KEY` | 可选；AI 分析必需，需单独开通 OpenAI API 计费，ChatGPT 订阅不能替代 |
+| `IIBD_AI_MODEL` | 可选，默认 `gpt-5-mini`；需是账号具备调用权限的模型 |
+
+生产 Railway Volume：`/data`。现阶段一次只允许运行一个服务实例，无法扩容副本。必须在 Railway Dashboard 给 Volume 设置备份策略：SQLite 单文件并不等于自动备份。
+
+### 操作
+1. 打开 `https://geo.zwlla.com/intelligence`，在原有项目表单中填行业、研究主体、16 家竞品（每行 `名称 | 官网 | direct/indirect/benchmark`）。
+2. 在 **长期研究项目** 模块填写管理员密钥，点击新建项目。
+3. 点击“开始/继续采集全部竞品”，程序分批自动采集并保存；有失败可在结果中查到，不能冒充扫描成功。
+4. 使用“校验原文并保存”提交额外事实；原文需要与真实来源页面内容一致，12 字以上。
+5. 如果已配置 `OPENAI_API_KEY`，点击“生成有来源的 AI 报告”。每条模型发现含对应事实证据 URL。
+6. 下载 JSON 作为离线备份，管理员数据不会被公开共享。
+
+### API 安全
+私有路径：`/api/research/projects`、`/api/research/projects/:id`、`/api/research/projects/:id/batch`、`/api/research/projects/:id/evidence`、`/api/research/projects/:id/ai`；均需 `Authorization: Bearer <管理员密钥>`。
+Cloudflare 已配置 `/api/research/` 的 POST 速率限制；服务端限制项目最多16个竞品、每批2个。建议后续使用 Cloudflare Access 做身份隔离并单独拆分后台进程。
+
+### 约束
+当前不具备商业销量、流量、客户成交数据、第三方平台评价 API 或企业经营数据验证。爬取的页面标题与介绍属于“来源声明”，不能当成“行业客观真相”。AI 若无 Key 会明确显示配置缺失，不会降级成无来源的虚拟分析。数据备份、重扫失败项、权限分级和更多合规数据源仍属于下一阶段。

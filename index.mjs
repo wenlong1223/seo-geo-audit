@@ -9,6 +9,8 @@ import { buildComparison } from './compare.mjs';
 import { collectSiteLinks,buildSiteReport } from './site.mjs';
 import { analyzeIntelligence,buildScanResearch } from './intelligence.mjs';
 import { INTELLIGENCE_PAGE } from './intelligence-page.mjs';
+import { handleResearchApi } from './research-api.mjs';
+import { RESEARCH_EXTENSION } from './research-extension.mjs';
 
 const blocked = new BlockList();
 for (const [ip, mask] of [
@@ -370,8 +372,9 @@ let active=0;
 const lastScans=[];
 async function handle(req) {
   const path=new URL(req.url).pathname;
+   if(path.startsWith('/api/research/'))return handleResearchApi(req,{audit,fetchSafe,normalizeURL,collectSiteLinks});
   if(req.method==='GET'&&path==='/') return new Response(HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
-  if(req.method==='GET'&&path==='/intelligence')return new Response(INTELLIGENCE_PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+  if(req.method==='GET'&&path==='/intelligence')return new Response(INTELLIGENCE_PAGE.replace('</body>',RESEARCH_EXTENSION+'</body>').replace(/\\u([0-9a-fA-F]{4})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16))),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
    if(req.method==='POST'&&path==='/api/intelligence/analyze'){
      if(Number(req.headers.get('content-length')||0)>140000)return json({error:'证据数据过大'},413);
      try{const raw=await req.text();if(raw.length>140000)return json({error:'证据数据过大'},413);
@@ -428,5 +431,5 @@ async function handle(req) {
   }catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}
   finally{active-=cost}
 }
-if(typeof Bun!=='undefined')Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
+if(typeof Bun!=='undefined'&&import.meta.main)Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
 export {normalizeURL,analyzeHTML,handle,audit,siteAudit};

@@ -14,3 +14,12 @@ jobs:
         with:
           node-version: '22'
       - run: node test.mjs
+
+  bun-persistence:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun run test-research.mjs
