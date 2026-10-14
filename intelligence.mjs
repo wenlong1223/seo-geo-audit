@@ -1,4 +1,8 @@
 /* IIBD V2 integration — bounded, evidence-first research with no invented market data. */
+import {createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
+const proofKey=randomBytes(32);
+const signature=x=>createHmac('sha256',proofKey).update([x.company,x.dimension,x.claim,x.sourceUrl,x.date,'scanner'].join('\x1f')).digest('hex');
+function validProof(x){if(typeof x?.proof!=='string'||!/^[a-f0-9]{64}$/.test(x.proof))return false;const expected=Buffer.from(signature(x),'hex');return timingSafeEqual(expected,Buffer.from(x.proof,'hex'))}
 export const DIMENSIONS=[
   ['icp','目标客户'],['product','服务与产品'],['pricing','报价与成本'],
   ['operations','履约与服务能力'],['integration','系统与集成'],
@@ -23,8 +27,9 @@ export function analyzeIntelligence(input={}){
     if(!companies.some(c=>c.name===company)||!labels[dimension]||!claim)throw Error('第'+(i+1)+'条证据的企业、维度或内容不符合要求');
     if(sourceUrl&&!sourceOk(sourceUrl))throw Error('第'+(i+1)+'条证据的来源链接无效');
     const origin=x?.origin==='scanner'?'scanner':'user';
-    const status=origin==='scanner'&&sourceUrl?'measured':sourceUrl?'cited-unverified':'unverified';
-    return {id:'CLM-'+String(i+1).padStart(3,'0'),company,dimension,claim,sourceUrl,date,origin,status};
+    const proof=origin==='scanner'&&sourceUrl&&validProof({company,dimension,claim,sourceUrl,date,proof:x.proof})?x.proof:'';
+    const status=proof?'measured':sourceUrl?'cited-unverified':'unverified';
+    return {id:'CLM-'+String(i+1).padStart(3,'0'),company,dimension,claim,sourceUrl,date,origin,status,proof};
   });
   const matrix=DIMENSIONS.map(([key,label])=>({key,label,cells:companies.map(c=>({company:c.name,items:records.filter(r=>r.company===c.name&&r.dimension===key)}))}));
   const withSource=records.filter(x=>x.sourceUrl).length;
@@ -55,6 +60,7 @@ export function buildScanResearch(payload,results){
     add('content','技术 SEO/GEO 就绪度：'+r.seoScore+'/'+r.geoScore+'（启发式技术评分，不等于排名或真实引用）');
     for(const issue of r.issues.slice(0,4)) if(issue.status==='fail') add('content','待修复：'+issue.label+'；检测依据：'+issue.detail);
   }
+  for(const record of records)record.proof=signature(record);
   const report=analyzeIntelligence({subject:cut(payload.subject,100),industry:cut(payload.industry,100),
     companies:companies.filter(c=>c.name!==payload.subject),records});
   report.scans=scans;
