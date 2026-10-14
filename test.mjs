@@ -135,7 +135,7 @@ const emptyResearch=analyzeIntelligence({subject:'86DROP',industry:'跨境履约
 assert.equal(emptyResearch.matrix.length,10);
 assert.equal(emptyResearch.matrix[0].cells[1].items.length,0);
 assert.ok(emptyResearch.markdown.includes('未采集'));
-assert.ok(!emptyResearch.markdown.includes('竞品没有'));
+assert.ok(emptyResearch.markdown.includes('未有证据不代表竞品没有该能力'));
 const dataResearch=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'Rival'}],records:[
  {company:'Rival',dimension:'pricing',claim:'官网提供询价入口，费用尚未确认',sourceUrl:'https://competitor.example/pricing',origin:'user'},
  {company:'86DROP',dimension:'content',claim:'缺少 JSON-LD',sourceUrl:'https://www.86drop.com/',origin:'scanner'}]});
