@@ -119,3 +119,40 @@ assert.ok(html.includes('站内多页面审计'));
 assert.match(inlineScript,/renderSite/);
 
 console.log('All assertions passed');
+
+
+/* IIBD integration smoke and contract tests */
+import { analyzeIntelligence,buildScanResearch } from './intelligence.mjs';
+const intelligencePage=await handle(new Request('http://localhost/intelligence'));
+assert.equal(intelligencePage.status,200);
+const intelligenceHTML=await intelligencePage.text();
+assert.ok(intelligenceHTML.includes('行业情报与商业决策工作台'));
+const researchInline=intelligenceHTML.split('<script data-cfasync="false">')[1]?.split('</script>')[0];
+assert.ok(researchInline,'research UI script exists');
+assert.doesNotThrow(()=>new vm.Script(researchInline),'research controller parses');
+assert.ok(html.includes('/intelligence'),'homepage links to research workbench');
+const emptyResearch=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'Rival',kind:'direct'}],records:[]});
+assert.equal(emptyResearch.matrix.length,10);
+assert.equal(emptyResearch.matrix[0].cells[1].items.length,0);
+assert.ok(emptyResearch.markdown.includes('未采集'));
+assert.ok(!emptyResearch.markdown.includes('竞品没有'));
+const dataResearch=analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'Rival'}],records:[
+ {company:'Rival',dimension:'pricing',claim:'官网提供询价入口，费用尚未确认',sourceUrl:'https://competitor.example/pricing',origin:'user'},
+ {company:'86DROP',dimension:'content',claim:'缺少 JSON-LD',sourceUrl:'https://www.86drop.com/',origin:'scanner'}]});
+assert.equal(dataResearch.coverage.measured,1);
+assert.equal(dataResearch.records[0].status,'cited-unverified');
+assert.equal(dataResearch.records[1].status,'measured');
+assert.ok(dataResearch.markdown.includes('CLM-001'));
+assert.throws(()=>analyzeIntelligence({subject:'86DROP',industry:'跨境履约',companies:[{name:'86DROP'}]}));
+assert.throws(()=>analyzeIntelligence({subject:'86DROP',industry:'跨境履约',records:[{company:'86DROP',dimension:'pricing',claim:'低价',sourceUrl:'javascript:alert(1)'}]}));
+const fromScan=buildScanResearch({subject:'86DROP',industry:'跨境履约'},[{name:'86DROP',kind:'self',url:'https://example.com/',report:result},{name:'Competitor',kind:'direct',url:'https://competitor.example/',error:'Timeout'}]);
+assert.equal(fromScan.scans.length,2);
+assert.equal(fromScan.coverage.measured>0,true);
+assert.ok(fromScan.records.every(x=>x.sourceUrl==='https://example.com/'));
+const postAnalysis=await handle(new Request('http://localhost/api/intelligence/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subject:'86DROP',industry:'跨境履约',companies:[],records:[]})}));
+assert.equal(postAnalysis.status,200);
+assert.equal((await postAnalysis.json()).kind,'iibd-industry-research');
+const invalidScan=await handle(new Request('http://localhost/api/intelligence/scan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subject:'86DROP',industry:'跨境履约',url:'https://example.com/',competitors:[{name:'dup',url:'https://www.example.com/'}]})}));
+assert.equal(invalidScan.status,400);
+const dockerIIBD=readFileSync(new URL('./Dockerfile',import.meta.url),'utf8');
+assert.ok(dockerIIBD.includes('intelligence-page.mjs')&&dockerIIBD.includes('intelligence.mjs'));
