@@ -1,5 +1,5 @@
 /* Standalone research page. Uses existing application server, no external assets. */
-export const INTELLIGENCE_PAGE=String.raw\`<!doctype html>
+export const INTELLIGENCE_PAGE=String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>行业情报工作台 · SEO/GEO Audit</title><meta name="description" content="有证据的竞品与行业信息工作台，支持真实技术扫描、商业证据登记、可追溯矩阵和 Markdown 导出。">
 <style>
@@ -98,4 +98,4 @@ $('downloadMd').onclick=()=>{if(last)download(last.markdown,'iibd-report-'+new D
 $('downloadJson').onclick=()=>{if(last)download(JSON.stringify({report:last,input:payload(),scans},null,2),'iibd-evidence-'+new Date().toISOString().slice(0,10)+'.json','application/json')};
 $('print').onclick=()=>window.print();
 })();
-</script></body></html>\`;
+</script></body></html>`;
