@@ -160,3 +160,33 @@ const invalidScan=await handle(new Request('http://localhost/api/intelligence/sc
 assert.equal(invalidScan.status,400);
 const dockerIIBD=readFileSync(new URL('./Dockerfile',import.meta.url),'utf8');
 assert.ok(dockerIIBD.includes('intelligence-page.mjs')&&dockerIIBD.includes('intelligence.mjs'));
+
+
+/* IIBD persistent module regression smoke tests. Node CI deliberately lacks Bun SQLite and secrets. */
+import {extractPublicClaims,canVisitByRobots} from './research-collector.mjs';
+import {vetAIOutput,makeEvidencePacket} from './research-ai.mjs';
+const liveResearch=await handle(new Request('https://geo.zwlla.com/intelligence'));
+assert.equal(liveResearch.status,200);
+const appHtml=await liveResearch.text();
+assert.ok(appHtml.includes('16 家竞品分批采集'));
+assert.ok(appHtml.includes('ri-batch'));
+assert.ok(!/\\u[0-9a-fA-F]{4}/.test(appHtml),'HTML does not render escaped unicode literals');
+const newInline=appHtml.split('<script data-cfasync="false">').at(-1).split('</script>')[0];
+assert.doesNotThrow(()=>new vm.Script(newInline),'research extension script parses');
+const unauthorized=await handle(new Request('https://geo.zwlla.com/api/research/projects'));
+assert.equal(unauthorized.status,503,'private endpoints closed when no secret is provisioned');
+const htmlSample='<html><title>Fulfillment Service</title><meta name="description" content="We fulfill your international orders"><h1>Cross-border Shipping and Fulfillment Solutions</h1><p>Our delivery services serve independent e-commerce sellers across multiple countries worldwide.</p></html>';
+const extracted=extractPublicClaims(htmlSample,'https://example.com','Brand');
+assert.ok(extracted.length>=2);
+assert.ok(extracted.every(x=>x.sourceUrl==='https://example.com'&&x.status==='page-observed'&&x.quote));
+assert.equal(canVisitByRobots('User-agent: *\nDisallow: /private\n','/private/about'),false);
+assert.equal(canVisitByRobots('User-agent: *\nDisallow: /private\n','/public'),true);
+const evidencePacket=makeEvidencePacket({evidence:[
+ {id:'e1',company:'Alpha',dimension:'product',quote:'This is a literal source excerpt',source_url:'https://example.com',status:'page-observed'},
+ {id:'e2',company:'Beta',dimension:'pricing',quote:'Manual unsupported statement',source_url:'https://example.com',status:'unverified'}]});
+assert.deepEqual(evidencePacket.map(x=>x.id),['e1']);
+const evidenceVetted=vetAIOutput({summary:'Research test',findings:[
+ {claim:'Supported',source_ids:['e1'],confidence:'medium',next_step:'verify'},
+ {claim:'Invented',source_ids:['fake'],confidence:'high',next_step:'buy'}]},evidencePacket);
+assert.deepEqual(evidenceVetted.findings.map(x=>x.claim),['Supported']);
+assert.ok(readFileSync(new URL('./Dockerfile',import.meta.url),'utf8').includes('research-store.mjs'));
