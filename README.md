@@ -200,3 +200,21 @@ Cloudflare 已配置 `/api/research/` 的 POST 速率限制；服务端限制项
 
 ### 约束
 当前不具备商业销量、流量、客户成交数据、第三方平台评价 API 或企业经营数据验证。爬取的页面标题与介绍属于“来源声明”，不能当成“行业客观真相”。AI 若无 Key 会明确显示配置缺失，不会降级成无来源的虚拟分析。数据备份、重扫失败项、权限分级和更多合规数据源仍属于下一阶段。
+
+## 行业知识引擎：Obsidian Markdown → 实体知识 → 关系 → 方案
+
+**在线入口：** https://geo.zwlla.com/knowledge
+
+本模块不是文章中那套 13,199 实体知识库的镜像。首次启用时为空库，只有真实导入的文件才计数。
+
+- 复用现有 Railway Bun + SQLite 持久卷，不引入额外服务器；所有 API 均使用现有 IIBD_ADMIN_TOKEN 鉴权。
+- 管理员可导入 .md 或桌面文件夹：单份最大18KB、每批最多12份，浏览器自动分批；保留原始内容、frontmatter、wikilinks、SHA256历史版本。
+- 支持实体类型（industry/pain/method/function/case/standard/kpi/spec/other）、行业、标签、别名和原始来源；出链、反链和未解析链接可直接查看。
+- 方案构建只使用明确选中的知识实体并保留引用 [KB:ID]；缺失案例/指标/功能时标记待补证。
+- 可选知识语义问答需 OPENAI_API_KEY。无 Key 时直接返回不可用，不使用关键词命中或 BM25/BFS 冒充 AI 检索；超过79条候选必须先缩小行业/实体类型。
+- 试验性远程 MCP：POST /mcp/knowledge，兼容 Streamable HTTP 2025-06-18 协议的已实现子集，提供五个只读/方案工具。必须使用 Bearer 管理员密钥。
+- 当前不支持 PPTX/PDF OCR、ZIP 解包、复杂嵌套 YAML、整库向量索引或原文章14 Skill自动迁移。
+
+**操作：** 打开 /knowledge → 输入 Railway 服务变量 IIBD_ADMIN_TOKEN → 连接 → 导入真实 Markdown → 浏览证据和关系 → 选择实体 → 生成引用版 Markdown。
+
+**安全提醒：** Markdown 内容作为数据而不是指令。页面转义显示笔记；文章中的关系是知识声明，不自动作为因果证明。启用备份后再进行长期项目归档。
