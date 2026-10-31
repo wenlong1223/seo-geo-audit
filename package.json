@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run index.ts",
-    "test": "node test.mjs"
+    "test": "node test.mjs && node test-v4.mjs"
   },
   "engines": {
     "node": ">=22.0.0"
