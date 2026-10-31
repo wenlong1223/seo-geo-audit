@@ -73,12 +73,12 @@ function normalize(obj){
  const pages=list.map(p=>({
   url:safeUrl(p.url||p.finalUrl||''),title:String(p.title||p.summary?.title||'').slice(0,220),
   seo:Number(p.seoScore??p.seo??p.scores?.seo??0),geo:Number(p.geoScore??p.geo??p.scores?.geo??0),
-  issues:Array.isArray(p.issues)?p.issues.slice(0,35):[],status:p.status,
+  issues:(Array.isArray(p.issues)?p.issues:Array.isArray(p.findings)?p.findings.map(x=>({...x,id:x.key||x.id,status:x.severity==='high'?'fail':'warn'})):[]).slice(0,35),status:p.status,
   depth:p.depth,links:Array.isArray(p.links)?p.links.slice(0,120):[]
  })).filter(p=>p.url);
  if(!pages.length)throw Error('报告中没有有效的已检测页面 URL');
  const website=safeUrl(r.website||r.startUrl||r.origin||pages[0].url)||pages[0].url;
- const graph=Array.isArray(r.graph)?r.graph.slice(0,700).map(e=>({from:safeUrl(e.from),to:safeUrl(e.to)})).filter(e=>e.from&&e.to):[];
+ const graph=Array.isArray(r.graph)?r.graph.slice(0,700).map(e=>({from:safeUrl(e.from),to:safeUrl(e.to)})).filter(e=>e.from&&e.to):pages.flatMap(p=>p.links.map(to=>({from:p.url,to:safeUrl(to)}))).filter(e=>e.to).slice(0,700);
  const avg=k=>Math.round(pages.reduce((n,p)=>n+(p[k]||0),0)/pages.length);
  return {kind:'geo-v4-portal-report',website,scannedAt:r.scannedAt||new Date().toISOString(),
  pages,graph,scores:{seo:Number(r.scores?.seo??r.average?.seo??avg('seo')),geo:Number(r.scores?.geo??r.average?.geo??avg('geo'))},
