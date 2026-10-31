@@ -1,7 +1,7 @@
 /** SEO/GEO V4 portal. Existing public scan APIs remain unchanged.
  * Snapshots are client-side in this browser only; never uploaded as stored reports.
  */
-export const V4_PAGE = String.raw<!doctype html>
+export const V4_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
 <title>Web Toolkit V4 · SEO/GEO 网站工作台</title>
 <meta name="description" content="Safari Web Toolkit V4：本地报告导入、历史差异、内链拓扑、SEO/GEO 检测、Codex 整改清单。">
