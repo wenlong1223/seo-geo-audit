@@ -30,7 +30,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;table-layout:fixed}
 td,th{padding:10px 8px;border-bottom:1px solid #284053;text-align:left;word-break:break-word;vertical-align:top}
 th{color:#98bad1}th:first-child{width:56%}
 .chip{font-size:11px;color:#b0d5e5;border:1px solid #36556c;padding:3px 7px;border-radius:6px;display:inline-block;margin:2px 5px 2px 0}
-.scroll{overflow:auto;max-height:460px}pre{background:#071421;border:1px solid #2c4355;border-radius:10px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;font:11px/1.7 ui-monospace,monospace}
+.scroll{overflow:auto;max-height:460px}.scroll td:first-child{white-space:pre-line}.muted,.error{white-space:pre-line}pre{background:#071421;border:1px solid #2c4355;border-radius:10px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;font:11px/1.7 ui-monospace,monospace}
 .disclaimer{margin-top:25px;color:#7795ac;font-size:12px;line-height:1.8}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.panel{padding:15px}h1{margin-top:28px}}
 </style></head><body><main>
@@ -63,7 +63,14 @@ function status(s,error){$('status').textContent=s;$('status').className='panel 
 function safeUrl(s){try{const u=new URL(s);return u.protocol==='https:'||u.protocol==='http:'?u.href:'';}catch{return '';}}
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(d)?d.slice(0,12):[];}catch{return [];}}
 function save(report){const a=load();a.unshift({when:new Date().toISOString(),website:report.website,report});try{localStorage.setItem(KEY,JSON.stringify(a.slice(0,8)));}catch{status('浏览器存储空间不足：本次报告可浏览和导出，但未能保存历史。',true);}}
-function textNode(node,v){node.textContent=String(v==null?'':v);}
+// Reports from external tools may contain literal \uXXXX or \n sequences.
+// Decode for presentation only; never assign imported text to innerHTML.
+function displayText(v){
+ const s=String(v==null?'':v);
+ return s.replace(/\\u([0-9a-fA-F]{4})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16)))
+         .replace(/\\r\\n|\\n/g,'\n');
+}
+function textNode(node,v){node.textContent=displayText(v);}
 function normalize(obj){
  if(!obj||typeof obj!=='object')throw Error('无效报告');
  const r=obj.kind==='geo-v4-site-audit'||obj.kind==='geo-multipage-audit'?obj:(obj.crawl&&Array.isArray(obj.crawl.pages)?obj.crawl:(Array.isArray(obj.pages)?obj:null));
@@ -84,7 +91,7 @@ function normalize(obj){
  pages,graph,scores:{seo:Number(r.scores?.seo??r.average?.seo??avg('seo')),geo:Number(r.scores?.geo??r.average?.geo??avg('geo'))},
  failures:(Array.isArray(r.failures)?r.failures:[]).slice(0,100),coverage:r.coverage||{scannedPages:pages.length},disclaimer:r.disclaimer||'只反映已扫描样本'};
 }
-function makeRows(parent,rows){parent.replaceChildren();for(const cells of rows){const tr=document.createElement('tr');for(const v of cells){const td=document.createElement('td');td.textContent=String(v);tr.append(td);}parent.append(tr);}}
+function makeRows(parent,rows){parent.replaceChildren();for(const cells of rows){const tr=document.createElement('tr');for(const v of cells){const td=document.createElement('td');td.textContent=displayText(v);tr.append(td);}parent.append(tr);}}
 function fmtDate(s){try{return new Date(s).toLocaleString('zh-CN');}catch{return s;}}
 function render(){
  const r=state.current;if(!r)return;
