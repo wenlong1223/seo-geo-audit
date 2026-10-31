@@ -13,6 +13,20 @@ const embedded=V4_PAGE.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
 assert.ok(embedded, 'V4 inline portal JS missing');
 new vm.Script(embedded,{filename:'v4-portal-inline.js'});
 
+assert.match(V4_PAGE, /white-space:pre-line/, 'preserve visible line breaks');
+const sourceStart=embedded.indexOf('function displayText(');
+const sourceEnd=embedded.indexOf('function normalize(',sourceStart);
+assert.ok(sourceStart>=0 && sourceEnd>sourceStart,'safe text renderer is present');
+const {displayText,textNode}=new vm.Script(embedded.slice(sourceStart,sourceEnd)+'\n({displayText,textNode})').runInNewContext({});
+assert.equal(displayText('\\u4e2d\\u6587'),'中文','decode literal Unicode escapes');
+assert.equal(displayText('第一行\\n第二行'),'第一行\n第二行','decode literal newline escapes');
+const unsafe='<img src=x onerror=alert(1)>';
+const view={innerHTML:'original'};
+textNode(view,unsafe);
+assert.equal(view.textContent,unsafe,'preserve visible tag characters');
+assert.equal(view.innerHTML,'original','do not interpret imported markup as HTML');
+
+
 const page=await handle(new Request('https://geo.zwlla.com/toolkit'));
 assert.equal(page.status,200);
 assert.match(page.headers.get('content-type'),/text\/html/);
