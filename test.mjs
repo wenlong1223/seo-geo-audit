@@ -197,6 +197,7 @@ assert.equal(roiPageResponse.status,200);
 assert.ok((roiPageResponse.headers.get('content-type')||'').includes('text/html'));
 const roiHTML=await roiPageResponse.text();
 assert.match(roiHTML,/豆包自然GEO收益测算/);
+assert.ok(!/\\\\u[0-9a-fA-F]{4}/.test(roiHTML),'ROI HTML must not expose escaped Unicode sequences');
 assert.match(roiHTML,/营收ROI/);
 assert.match(roiHTML,/毛利ROI/);
 assert.match(roiHTML,/问答推荐率/);
