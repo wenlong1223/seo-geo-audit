@@ -194,7 +194,7 @@ assert.ok(readFileSync(new URL('./Dockerfile',import.meta.url),'utf8').includes(
 /* Doubao organic GEO ROI module integration smoke tests. */
 const roiPageResponse=await handle(new Request('https://geo.zwlla.com/roi'));
 assert.equal(roiPageResponse.status,200);
-assert.match(roiPageResponse.headers.get('content-type')||'',/text\\/html/);
+assert.ok((roiPageResponse.headers.get('content-type')||'').includes('text/html'));
 const roiHTML=await roiPageResponse.text();
 assert.match(roiHTML,/豆包自然GEO收益测算/);
 assert.match(roiHTML,/营收ROI/);
