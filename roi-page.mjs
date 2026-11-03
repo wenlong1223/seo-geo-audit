@@ -1,5 +1,5 @@
 /** Doubao Organic GEO ROI calculator. Client-side only; no API calls or external assets. */
-export const GEO_ROI_PAGE = String.raw\`<!doctype html>
+export const GEO_ROI_PAGE = String.raw`<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -447,4 +447,4 @@ render();
 })();
 </script>
 </body>
-</html>\`;
+</html>`;
