@@ -415,17 +415,17 @@ function report(){
  const a=calc('current'),b=calc('target'),s=searchStats();
  const industry=$('industry').value==='custom'?($('customIndustry').value||'自定义行业'):$('industry').selectedOptions[0].textContent;
  const period={30:'近30天',90:'季度',182:'半年',365:'全年'}[periodDays];
- return '# 豆包自然GEO收益核算报告\\n\\n'+
- '- 核算日期：'+new Date().toLocaleDateString('zh-CN')+'\\n'+
- '- 核算周期：'+period+'\\n- 商家行业：'+industry+'\\n- 所在区域：'+($('city').value||'未填写')+'\\n- 门店/分校数量：'+n('stores')+'\\n- 目标搜索词：'+n('totalTerms')+' 条\\n- 有效商业词：'+n('commercialTerms')+' 条\\n\\n'+
- '> **核算范围：仅豆包自然GEO流量。排除付费竞价、信息流广告、短视频付费投放及第三方平台付费推广。所有结果均为基于GEO权重模型推演，非企业后台原始经营数据。模型推演值仅供参考，实际收益受商家承接能力、市场环境、竞品动作等因素影响。**\\n\\n'+
- '## 一、搜索词商业价值\\n\\n| 指标 | 结果 |\\n|---|---:|\\n| 周期搜索量 | '+num(s.volume)+' |\\n| 加权单次搜索商业价值 | '+money(s.weighted)+' |\\n| 周期搜索总商业价值 | '+money(s.totalValue)+' |\\n\\n搜索商业价值仅用于评估词包价值密度，不直接叠加到营收。\\n\\n'+
- '## 二、GEO权重参数\\n\\n| 指标 | 现状 | 优化目标 |\\n|---|---:|---:|\\n| 知识图谱覆盖度 | '+n('kgCurrent')+' 分 | '+n('kgTarget')+' 分 |\\n| 问答提及率 | '+n('mentionCurrent')+'% | '+n('mentionTarget')+'% |\\n| 问答推荐率 | '+n('recommendCurrent')+'% | '+n('recommendTarget')+'% |\\n| 基础实体召回曝光率 | '+n('recallCurrent')+'% | '+n('recallTarget')+'% |\\n| 修正后实体召回曝光率 | '+pct(a.adjustedRecall)+' | '+pct(b.adjustedRecall)+' |\\n\\n'+
- '## 三、转化漏斗\\n\\n| 指标 | 现状 | 优化目标 |\\n|---|---:|---:|\\n| 有效曝光量 | '+num(a.exposure)+' | '+num(b.exposure)+' |\\n| 有效点击量 | '+num(a.clicks)+' | '+num(b.clicks)+' |\\n| 有效客资量 | '+num(a.leads)+' | '+num(b.leads)+' |\\n| 成交订单量（含复购等效） | '+num(a.orders,2)+' | '+num(b.orders,2)+' |\\n| GEO增量营收 | '+money(a.revenue)+' | '+money(b.revenue)+' |\\n| GEO增量毛利 | '+money(a.gross)+' | '+money(b.gross)+' |\\n\\n'+
- '## 四、双口径ROI\\n\\n| 指标 | 现状 | 优化目标 |\\n|---|---:|---:|\\n| 周期GEO投入 | '+money(a.cost)+' | '+money(b.cost)+' |\\n| 营收ROI | '+multiple(a.revenueROI)+' | '+multiple(b.revenueROI)+' |\\n| 毛利ROI | '+multiple(a.grossROI)+' | '+multiple(b.grossROI)+' |\\n| 单客资获取成本 | '+money(a.cpl)+' | '+money(b.cpl)+' |\\n| 单成交获客成本 | '+money(a.cpa)+' | '+money(b.cpa)+' |\\n\\n'+
- '## 五、优化预期差额\\n\\n- 模型推演增量营收：'+money(b.revenue-a.revenue)+'\\n- 模型推演增量毛利：'+money(b.gross-a.gross)+'\\n- 全年GEO投入：'+money(annualCost())+'\\n- 门店地域修正系数：'+a.storeFactor.toFixed(3)+'\\n\\n'+
- '## 六、年度投入构成\\n\\n| 项目 | 年度金额 |\\n|---|---:|\\n| 运营人力 | '+money(n('laborCost'))+' |\\n| 信源素材制作 | '+money(n('contentCost'))+' |\\n| 外部权威信源 | '+money(n('sourceCost'))+' |\\n| 工具与诊断 | '+money(n('toolCost'))+' |\\n| 其他专项费用 | '+money(n('otherCost'))+' |\\n| **年度合计** | **'+money(annualCost())+'** |\\n\\n'+
- '## 七、补充说明\\n\\n'+($('notes').value||'暂无补充说明')+'\\n\\n---\\n\\n本报告为模型推演值，不是企业后台原始经营数据、豆包官方推荐概率或收益承诺。实际收益受商家承接能力、市场环境、竞品动作等因素影响。';
+ return '# 豆包自然GEO收益核算报告\n\n'+
+ '- 核算日期：'+new Date().toLocaleDateString('zh-CN')+'\n'+
+ '- 核算周期：'+period+'\n- 商家行业：'+industry+'\n- 所在区域：'+($('city').value||'未填写')+'\n- 门店/分校数量：'+n('stores')+'\n- 目标搜索词：'+n('totalTerms')+' 条\n- 有效商业词：'+n('commercialTerms')+' 条\n\n'+
+ '> **核算范围：仅豆包自然GEO流量。排除付费竞价、信息流广告、短视频付费投放及第三方平台付费推广。所有结果均为基于GEO权重模型推演，非企业后台原始经营数据。模型推演值仅供参考，实际收益受商家承接能力、市场环境、竞品动作等因素影响。**\n\n'+
+ '## 一、搜索词商业价值\n\n| 指标 | 结果 |\n|---|---:|\n| 周期搜索量 | '+num(s.volume)+' |\n| 加权单次搜索商业价值 | '+money(s.weighted)+' |\n| 周期搜索总商业价值 | '+money(s.totalValue)+' |\n\n搜索商业价值仅用于评估词包价值密度，不直接叠加到营收。\n\n'+
+ '## 二、GEO权重参数\n\n| 指标 | 现状 | 优化目标 |\n|---|---:|---:|\n| 知识图谱覆盖度 | '+n('kgCurrent')+' 分 | '+n('kgTarget')+' 分 |\n| 问答提及率 | '+n('mentionCurrent')+'% | '+n('mentionTarget')+'% |\n| 问答推荐率 | '+n('recommendCurrent')+'% | '+n('recommendTarget')+'% |\n| 基础实体召回曝光率 | '+n('recallCurrent')+'% | '+n('recallTarget')+'% |\n| 修正后实体召回曝光率 | '+pct(a.adjustedRecall)+' | '+pct(b.adjustedRecall)+' |\n\n'+
+ '## 三、转化漏斗\n\n| 指标 | 现状 | 优化目标 |\n|---|---:|---:|\n| 有效曝光量 | '+num(a.exposure)+' | '+num(b.exposure)+' |\n| 有效点击量 | '+num(a.clicks)+' | '+num(b.clicks)+' |\n| 有效客资量 | '+num(a.leads)+' | '+num(b.leads)+' |\n| 成交订单量（含复购等效） | '+num(a.orders,2)+' | '+num(b.orders,2)+' |\n| GEO增量营收 | '+money(a.revenue)+' | '+money(b.revenue)+' |\n| GEO增量毛利 | '+money(a.gross)+' | '+money(b.gross)+' |\n\n'+
+ '## 四、双口径ROI\n\n| 指标 | 现状 | 优化目标 |\n|---|---:|---:|\n| 周期GEO投入 | '+money(a.cost)+' | '+money(b.cost)+' |\n| 营收ROI | '+multiple(a.revenueROI)+' | '+multiple(b.revenueROI)+' |\n| 毛利ROI | '+multiple(a.grossROI)+' | '+multiple(b.grossROI)+' |\n| 单客资获取成本 | '+money(a.cpl)+' | '+money(b.cpl)+' |\n| 单成交获客成本 | '+money(a.cpa)+' | '+money(b.cpa)+' |\n\n'+
+ '## 五、优化预期差额\n\n- 模型推演增量营收：'+money(b.revenue-a.revenue)+'\n- 模型推演增量毛利：'+money(b.gross-a.gross)+'\n- 全年GEO投入：'+money(annualCost())+'\n- 门店地域修正系数：'+a.storeFactor.toFixed(3)+'\n\n'+
+ '## 六、年度投入构成\n\n| 项目 | 年度金额 |\n|---|---:|\n| 运营人力 | '+money(n('laborCost'))+' |\n| 信源素材制作 | '+money(n('contentCost'))+' |\n| 外部权威信源 | '+money(n('sourceCost'))+' |\n| 工具与诊断 | '+money(n('toolCost'))+' |\n| 其他专项费用 | '+money(n('otherCost'))+' |\n| **年度合计** | **'+money(annualCost())+'** |\n\n'+
+ '## 七、补充说明\n\n'+($('notes').value||'暂无补充说明')+'\n\n---\n\n本报告为模型推演值，不是企业后台原始经营数据、豆包官方推荐概率或收益承诺。实际收益受商家承接能力、市场环境、竞品动作等因素影响。';
 }
 async function copyText(text){
  if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return true;}
@@ -434,7 +434,7 @@ async function copyText(text){
 }
 $('copyReport').addEventListener('click',async()=>{try{const ok=await copyText(report());alert(ok?'Markdown报告已复制。':'复制失败，请使用下载功能。');}catch(e){alert('复制失败，请使用下载功能。');}});
 $('downloadReport').addEventListener('click',()=>{
- const blob=new Blob(['\\uFEFF'+report()],{type:'text/markdown;charset=utf-8'});
+ const blob=new Blob(['\uFEFF'+report()],{type:'text/markdown;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='doubao-organic-geo-roi-'+new Date().toISOString().slice(0,10)+'.md';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 });
 $('reset').addEventListener('click',()=>{
