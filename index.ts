@@ -381,5 +381,68 @@ async function handle(req) {
    if(path.startsWith('/api/research/'))return handleResearchApi(req,{audit,fetchSafe,normalizeURL,collectSiteLinks});
    if(path.startsWith('/api/kb/'))return handleKnowledgeApi(req);
    if(path==='/mcp/knowledge')return handleKnowledgeMcp(req);
-  if(req.method==='GET'&&path==='/toolkit')return new Response(V4_PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
-  if(req.method==='GET'&&(path==='/roi'||path==='/geo-roi')){const roiHTML=GEO_ROI_PAGE.replace(/\\u([0-9a-fA-F]{4})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16)));return new Response(roiHTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});}
+  if(req.method==='GET'&&path==='/toolkit')return new Response(V4_PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});  if(req.method==='GET'&&(path==='/roi'||path==='/geo-roi')){const roiHTML=GEO_ROI_PAGE.replace(/\\u([0-9a-fA-F]{4})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16)));return new Response(roiHTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+   if(req.method==='GET'&&path==='/') return new Response(HTML,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+  if(req.method==='GET'&&path==='/knowledge')return new Response(KNOWLEDGE_PAGE.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+  if(req.method==='GET'&&path==='/intelligence')return new Response(INTELLIGENCE_PAGE.replace('</body>',RESEARCH_EXTENSION+'</body>').replace(/\\u([0-9a-fA-F]{4})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16))),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none';"}});
+   if(req.method==='POST'&&path==='/api/intelligence/analyze'){
+     if(Number(req.headers.get('content-length')||0)>140000)return json({error:'证据数据过大'},413);
+     try{const raw=await req.text();if(raw.length>140000)return json({error:'证据数据过大'},413);
+       return json(analyzeIntelligence(JSON.parse(raw)));
+     }catch(e){return json({error:String(e?.message||'证据格式错误').slice(0,240)},400)}
+   }
+   if(req.method==='GET'&&path==='/api/health')return json({ok:true,service:'seo-geo-audit',version:'1.3.0'});
+  if(req.method!=='POST'||!['/api/audit','/api/business-audit','/api/compare','/api/site-audit','/api/intelligence/scan'].includes(path))return json({error:'Not found'},404);
+  if(Number(req.headers.get('content-length')||0)>4096)return json({error:'请求过大'},413);
+  let payload;try{const raw=await req.text();if(raw.length>4096)return json({error:'请求过大'},413);payload=JSON.parse(raw);}catch{return json({error:'请提交合法 JSON 请求体'},400)}
+  let pair=false;
+  try {
+    const primary=normalizeURL(payload?.url);
+     if(path==='/api/intelligence/scan'){
+       if(!String(payload?.subject||'').trim()||!String(payload?.industry||'').trim())throw new Error('请填写研究主体及行业');
+       if(!Array.isArray(payload.competitors)||payload.competitors.length<1||payload.competitors.length>2)throw new Error('真实扫描最多包含2家竞品');
+       const seen=new Set([primary.hostname.replace(/^www\./,'')]);
+       for(const c of payload.competitors){if(!String(c?.name||'').trim())throw new Error('竞品名称不能为空');const u=normalizeURL(c.url);const h=u.hostname.replace(/^www\./,'');if(seen.has(h))throw new Error('不能重复扫描相同网站');seen.add(h)}
+     }
+    if(path==='/api/site-audit' && ![3,5].includes(payload.maxPages??5))throw new Error('每次最多检测 3 或 5 页');
+    if(path==='/api/business-audit')validateBusinessProfile(payload);
+    pair=path==='/api/compare'||(path==='/api/business-audit'&&payload.stage==='competitor');
+    if(pair){
+      if(!payload?.competitor)throw new Error('请填写竞品的完整公网网址');
+      const competitor=normalizeURL(payload.competitor);
+      if(primary.hostname.replace(/^www\./,'')===competitor.hostname.replace(/^www\./,''))
+        throw new Error('请填写不同网站的竞品网址');
+    }
+  }catch(err){return json({error:String(err.message).slice(0,240)},400)}
+  const now=Date.now();while(lastScans.length&&lastScans[0]<now-60000)lastScans.shift();
+  const cost=path==='/api/site-audit'||path==='/api/intelligence/scan'?3:pair?2:1;
+  if(active+cost>3||lastScans.length+cost>18)return json({error:'当前扫描请求较多，请一分钟后再试'},429);
+  active+=cost;for(let i=0;i<cost;i++)lastScans.push(now);
+  try{
+    if(path==='/api/site-audit')return json(await siteAudit(payload.url,payload.maxPages??5));
+     if(path==='/api/intelligence/scan'){
+       const targets=[{name:String(payload.subject).trim(),url:payload.url,kind:'self'},...payload.competitors.map(x=>({name:String(x.name).trim(),url:x.url,kind:x.kind||'direct'}))];
+       const settled=await Promise.allSettled(targets.map(t=>audit(t.url)));
+       const results=settled.map((r,i)=>({...targets[i],...(r.status==='fulfilled'?{report:r.value}:{error:String(r.reason?.message||'扫描失败').slice(0,180)})}));
+       return json(buildScanResearch(payload,results));
+     }
+    if(pair) {
+      const [a,b]=await Promise.allSettled([audit(payload.url),audit(payload.competitor)]);
+      if(a.status==='rejected')throw new Error('本站抓取失败：'+String(a.reason?.message||a.reason));
+      if(b.status==='rejected')throw new Error('竞品抓取失败：'+String(b.reason?.message||b.reason));
+      const comparison=buildComparison(a.value,b.value);
+      if(path==='/api/compare')return json(comparison);
+      const report=buildEnterpriseReport(a.value,payload);
+      report.comparison=comparison;
+      return json(report);
+    }
+    const scanned=await audit(payload.url);
+    return json(path==='/api/business-audit'?buildEnterpriseReport(scanned,payload):scanned);
+  }catch(err){return json({error:String(err?.message||'网站检测失败').slice(0,240)},400)}
+  finally{active-=cost}
+}
+if(typeof Bun!=='undefined'&&import.meta.main){
+  if(process.env.IIBD_DB_PATH){await researchStore();await knowledgeStore();console.info('[IIBD/KB] SQLite WAL store and knowledge schema initialized on persistent volume');}
+  Bun.serve({port:Number(Bun.env.PORT||3000),hostname:'0.0.0.0',fetch:handle});
+}
+export {normalizeURL,analyzeHTML,handle,audit,siteAudit};
