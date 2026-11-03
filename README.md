@@ -75,6 +75,17 @@ curl -X POST "https://geo.zwlla.com/api/audit" \
   -d '{"url":"https://example.com/"}'
 ```
 
+## 豆包自然GEO收益测算模块（/roi）
+
+**在线入口：** https://geo.zwlla.com/roi
+
+- 集成在现有 SEO/GEO Audit 首页导航中，与原检测、Web Toolkit V4、行业情报和知识引擎共用同一 Bun/Railway 服务。
+- 纯前端本地计算，无新增 API、数据库、外部脚本或第三方依赖；输入数据不会提交到服务端。
+- 支持近30天、季度、半年、全年；单店及连锁门店；现状/优化目标双模型；营收ROI与毛利ROI双口径；Markdown报告复制与下载。
+- 知识图谱覆盖度、问答提及率和门店数量通过有限修正系数调整基础实体召回率；搜索词商业价值单独展示，不重复计入营收。
+- 严格限定豆包自然GEO收益，不纳入付费竞价、信息流、短视频付费投放或其他第三方平台付费推广。
+- 所有结果均为GEO权重模型推演值，不是企业后台原始经营数据、豆包官方推荐概率或收益保证。
+
 ## 技术栈
 
 - **Runtime:** Bun / TypeScript（无第三方运行时依赖）
@@ -127,6 +138,7 @@ node test.mjs
 ## 仓库文件
 
 - `index.ts`：线上 Railway 服务构建使用的 Bun / TypeScript 完整源码
+- `roi-page.mjs`：豆包自然GEO收益测算模块（纯前端）
 - `index.mjs`：同一份源码的 Node.js ESM 测试镜像
 - `compare.mjs`：两个真实技术扫描结果的差异分析与整改优先级
 - `site.mjs`：安全的站内链接发现与多页面审计汇总
