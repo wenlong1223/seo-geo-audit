@@ -190,3 +190,25 @@ const evidenceVetted=vetAIOutput({summary:'Research test',findings:[
  {claim:'Invented',source_ids:['fake'],confidence:'high',next_step:'buy'}]},evidencePacket);
 assert.deepEqual(evidenceVetted.findings.map(x=>x.claim),['Supported']);
 assert.ok(readFileSync(new URL('./Dockerfile',import.meta.url),'utf8').includes('research-store.mjs'));
+ 
+/* Doubao organic GEO ROI module integration smoke tests. */
+const roiPageResponse=await handle(new Request('https://geo.zwlla.com/roi'));
+assert.equal(roiPageResponse.status,200);
+assert.match(roiPageResponse.headers.get('content-type')||'',/text\\/html/);
+const roiHTML=await roiPageResponse.text();
+assert.match(roiHTML,/豆包自然GEO收益测算/);
+assert.match(roiHTML,/营收ROI/);
+assert.match(roiHTML,/毛利ROI/);
+assert.match(roiHTML,/问答推荐率/);
+assert.match(roiHTML,/门店地域修正系数/);
+assert.match(roiHTML,/下载Markdown报告/);
+assert.ok(!roiHTML.includes('fetch('),'ROI calculator does not call remote APIs');
+const roiInline=roiHTML.split('<script>')[1]?.split('</script>')[0];
+assert.ok(roiInline,'ROI calculator inline script exists');
+assert.doesNotThrow(()=>new vm.Script(roiInline),'ROI calculator JavaScript parses');
+const roiAlias=await handle(new Request('https://geo.zwlla.com/geo-roi'));
+assert.equal(roiAlias.status,200);
+const roiHome=await handle(new Request('https://geo.zwlla.com/'));
+assert.ok((await roiHome.text()).includes('href="/roi"'),'homepage links to ROI module');
+assert.ok(readFileSync(new URL('./Dockerfile',import.meta.url),'utf8').includes('roi-page.mjs'));
+
